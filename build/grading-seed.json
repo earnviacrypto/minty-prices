@@ -25,14 +25,14 @@
       ["WalkThrough", "$300", "$100,000", "2 working days", "", "open"],
       ["Unlimited", "$300 + 1% of value", "any value", "2 working days", "", "open"]
     ]},
-    "BGS": { "checked": "2026-10-29T04:37:00Z", "from": "archive", "tiers": [
+    "BGS": { "checked": "2026-11-06T12:00:00Z", "from": "report", "by": "CardGrading.app", "byUrl": "https://cardgrading.app/beckett-grading-cost", "tiers": [
       ["Base", "$14.95", "", "75+ business days", "No sub-grades", "sold"],
       ["Base + sub-grades", "$17.95", "", "75+ business days", "", "sold"],
       ["Standard", "$34.95", "", "45 business days", "", "sold"],
       ["Express", "$79.95", "", "15 business days", "", "open"],
       ["Priority", "$124.95", "", "5 business days", "", "sold"]
     ]},
-    "SGC": { "checked": "2026-09-29T12:00:00Z", "from": "report", "tiers": [
+    "SGC": { "checked": "2026-11-12T12:00:00Z", "from": "report", "by": "TheLines", "byUrl": "https://www.thelines.com/card-rips/grading/sgc/", "tiers": [
       ["Standard", "$50", "$1,500", "40+ business days", "", "open"],
       ["Standard", "$85", "$3,500", "40+ business days", "", "open"],
       ["Expedited", "$150", "$3,500", "2–3 business days", "", "open"],
