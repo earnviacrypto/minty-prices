@@ -129,7 +129,7 @@ const reportsRun = async () => {
   const lone = rx('thelines-sgc').replace('Standard $1,500 $50', 'Standard $1,500 $60').replace('November 12, 2026', 'November 18, 2026');
   const s2 = {}; const gh2 = { download: async (t, n) => s2[n] || null, put: async (t, n, b) => { s2[n] = b; } };
   const r2 = await G.runGrading({ gh: gh2, readFetch: mk({ 'www.thelines.com': lone }), fetch: mk(), now: Date.parse('2026-11-19T12:00:00Z'), log: () => {} });
-  ok(r2.companies.SGC.by === 'AA Mint Store' && r2.companies.SGC.tiers[0][1] === '$50', 'reports: a new price shown by only one site is not used; the next confirmed report is');
+  ok(r2.companies.SGC.checked === '2026-11-12T12:00:00Z' && r2.companies.SGC.tiers[0][1] === '$50', 'reports: a new price shown by only one site is not used; older confirmed reports do not replace newer data');
   // a challenge page (Cloudflare / Vercel checkpoint) is never read as prices
   ok(G.REPORTS.SGC[0].read('<title>Vercel Security Checkpoint</title>') === null && G.REPORTS.BGS[0].read('Just a moment...') === null, 'reports: a challenge page is not read as prices');
   // a report older than what we already show changes nothing
