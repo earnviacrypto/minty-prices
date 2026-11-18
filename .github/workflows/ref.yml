@@ -6,11 +6,26 @@ on:
 permissions:
   contents: write
 jobs:
-  cleanup:
+  pages:
     runs-on: ubuntu-latest
     steps:
-      - name: Remove the temporary page copies
+      - name: Read CGC and SGC price pages
+        run: |
+          mkdir -p out
+          for u in https://www.cgccards.com/submit/services-fees/cgc-grading/ https://www.gosgc.com/card-grading/services-pricing https://gosgc.com/card-grading/services-pricing; do
+            n=$(echo "$u" | md5sum | cut -c1-6)
+            curl -sL --compressed -m 60 -o "out/$n.jina.txt" "https://r.jina.ai/$u"
+            curl -sL --compressed -m 60 -o "out/$n.avail.json" "https://archive.org/wayback/available?url=$u"
+            s=$(python3 -c "import json;c=json.load(open('out/$n.avail.json')).get('archived_snapshots',{}).get('closest',{});print(c.get('url',''))")
+            echo "$u $n $s" >> out/list.txt
+            [ -n "$s" ] && curl -sL --compressed -m 60 -o "out/$n.wb.html" "$(echo $s | sed -E 's#^http:#https:#; s#/web/([0-9]+)/#/web/\1id_/#')"
+            [ -n "$s" ] && curl -sL --compressed -m 60 -o "out/$n.wbjina.txt" "https://r.jina.ai/$(echo $s | sed -E 's#^http:#https:#')"
+          done
+          ls -la out
+      - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: gh release delete ref --yes --cleanup-tag || true
+        run: |
+          gh release view ref >/dev/null 2>&1 || gh release create ref --title ref --notes "temporary"
+          tar czf pages.tgz out && gh release upload ref pages.tgz --clobber
