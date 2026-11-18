@@ -1,0 +1,5 @@
+card-charizard-base.jpg https://tcgplayer-cdn.tcgplayer.com/product/42382_in_1000x1000.jpg
+card-lugia-neo.jpg https://tcgplayer-cdn.tcgplayer.com/product/86903_in_1000x1000.jpg
+card-charmander-base.jpg https://tcgplayer-cdn.tcgplayer.com/product/42389_in_1000x1000.jpg
+card-blastoise-base.jpg https://tcgplayer-cdn.tcgplayer.com/product/42360_in_1000x1000.jpg
+card-pikachu-base.jpg https://tcgplayer-cdn.tcgplayer.com/product/42402_in_1000x1000.jpg

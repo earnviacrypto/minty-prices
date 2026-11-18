@@ -1,0 +1,27 @@
+name: media
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/media.yml', 'media.txt']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch card pictures for the Grading page
+        run: |
+          mkdir -p out
+          while read -r name url; do
+            [ -z "$name" ] && continue
+            curl -sfL -m 60 -o "out/$name" "$url" || echo "failed $name"
+          done < media.txt
+          ls -la out
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view media >/dev/null 2>&1 || gh release create media --title media --notes "Pictures used by the app"
+          gh release upload media out/* --clobber
