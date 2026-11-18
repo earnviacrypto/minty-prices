@@ -16,8 +16,8 @@ for line in open('ref.txt'):
     seen = []
     for m in re.findall(r'(?:src|data-src|srcset|href|content)=["\']([^"\']+?\.(?:jpg|jpeg|png|webp)[^"\'\s,]*)', h, re.I):
         u = urllib.parse.urljoin(base, m.split(' ')[0])
-        if re.search(r'slab|label|holder|graded|grade|psa|cgc|bgs|sgc|tag|pokemon|card', u, re.I) and u not in seen: seen.append(u)
-    for k, u in enumerate(seen[:25], 1):
+        if re.search(r'slab|label|holder|graded|grade|psa|cgc|bgs|sgc|tag|pokemon|card|upload|optimized|wp-content', u, re.I) and u not in seen: seen.append(u)
+    for k, u in enumerate(seen[:40], 1):
         b = get(u)
         if len(b) > 3000:
             ext = re.sub(r'\?.*', '', u).rsplit('.', 1)[-1][:4]
