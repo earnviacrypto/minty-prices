@@ -17,4 +17,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view ref >/dev/null 2>&1 || gh release create ref --title ref --notes "temporary"
-          ls out/* >/dev/null 2>&1 && gh release upload ref out/* --clobber || echo none
+          tar czf ref.tgz out && gh release upload ref ref.tgz --clobber
