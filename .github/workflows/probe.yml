@@ -2,19 +2,14 @@ name: probe
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/probe.yml', 'probe.py']
+    paths: ['.github/workflows/probe.yml']
 permissions:
   contents: write
 jobs:
-  probe:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 probe.py
-      - name: Publish
-        env:
+      - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          gh release view probe >/dev/null 2>&1 || gh release create probe --title probe --notes "temporary"
-          tar czf probe.tgz out && gh release upload probe probe.tgz --clobber
+        run: gh release delete probe --yes --cleanup-tag || true
