@@ -31,6 +31,13 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   const last = r.cards.values[r.cards.values.length - 1];
   ok(last > 1080 && last < 1120, 'follows the cards (~+10%): ' + last);
   ok(!r.cards.up.concat(r.cards.down).some(x => x.id > 70), 'cards whose price never moves are left out');
+  // a quiet game: 40 cards whose price moves about once every 12 days still gets an index, at the 5-day bar
+  const q = new Hist('2024-02-08');
+  for (let i = 1; i <= 40; i++) for (let d = 0; d < D; d++) q.set(i + '|Normal', 6, d, i * 100 + Math.floor(d / 12));
+  const pq = { groups: [{ groupId: 6, name: 'Set Q' }], products: { 6: Array.from({ length: 40 }, (_, k) => [k + 1, 'Q ' + (k + 1), String(k + 1), 'Rare', '', 1]) } };
+  const rq = categoryIndexes(q, pq, '2024-02-08');
+  ok(rq.cards && rq.cards.n === 20 && rq.cards.bar === 5, 'quiet game: index at the 5-day bar');
+  ok(r.cards.bar === 20, 'busy game keeps the 20-day bar');
   ok(sizeFor('card', 500) === 100 && sizeFor('sealed', 30) === 10 && sizeFor('card', 10) === 0, 'sizes');
 }
 
