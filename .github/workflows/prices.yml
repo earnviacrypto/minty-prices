@@ -3,12 +3,14 @@ name: Prices
 on:
   schedule:
     - cron: '17 * * * *'
+    - cron: '47 */3 * * *' # second slot in case GitHub skips the first
   workflow_dispatch:
   push: # a change to the job runs it at once
     branches: [main]
     paths: ['build/**', 'config.json', '.github/workflows/prices.yml']
 permissions:
   contents: write
+  actions: write # lets the job start its next run itself
 concurrency:
   group: prices
   cancel-in-progress: false
@@ -38,3 +40,16 @@ jobs:
           EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
           EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: Next run
+        # GitHub's hourly schedule can be skipped for days, so the job keeps itself going:
+        # wait until about an hour after this run started, then start the next run if none is waiting.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          started=$(date -d "$(gh run view ${{ github.run_id }} --json startedAt -q .startedAt)" +%s)
+          left=$(( started + 3500 - $(date +%s) ))
+          if [ $left -gt 0 ]; then sleep $left; fi
+          waiting=$(gh run list -w Prices --json status -q '[.[] | select(.status=="queued" or .status=="waiting" or .status=="pending")] | length')
+          if [ "$waiting" = "0" ]; then gh workflow run Prices --ref main; echo "next run started"; else echo "a run is already waiting"; fi
