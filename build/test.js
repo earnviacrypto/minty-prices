@@ -104,6 +104,36 @@ const gradingRun = async () => {
   const again = await G.runGrading({ gh, readFetch, fetch: readFetch, now: Date.parse('2026-11-19T15:00:00Z'), log: () => {} });
   ok(again.skipped && JSON.parse(store['grading.json']).updated === '2026-11-19T12:00:00.000Z', 'grading run: only once a day');
 };
+const reportsRun = async () => {
+  const G = require('./grading');
+  const rx = f => fs.readFileSync(path.join(__dirname, 'fixtures', 'reports', f + '.txt'), 'utf8');
+  const sites = { 'www.thelines.com': rx('thelines-sgc'), 'www.aamintstore.com': rx('aamint-sgc'), 'cardgrade.io/sgc': rx('cgio-sgc'),
+    'cardgrading.app': rx('cga-bgs'), 'cardgrade.io/bec': rx('cgio-bgs'), 'www.tcgrader.com': rx('tcgrader') };
+  const mk = over => async (u) => {
+    if (/archive\.org\/wayback/.test(u)) return { ok: true, json: async () => ({ archived_snapshots: {} }) };
+    const x = new URL(u), key = x.host === 'cardgrade.io' ? 'cardgrade.io/' + x.pathname.slice(1, 4) : x.host;
+    const body = (over && over[key]) || sites[key] || '<title>Just a moment...</title>';
+    return { ok: true, text: async () => body };
+  };
+  const store = {}; const gh = { download: async (t, n) => store[n] || null, put: async (t, n, b) => { store[n] = b; } };
+  const r = await G.runGrading({ gh, readFetch: mk(), fetch: mk(), now: Date.parse('2026-11-19T12:00:00Z'), log: () => {} });
+  const sgc = r.companies.SGC, bgs = r.companies.BGS;
+  ok(sgc.from === 'report' && sgc.by === 'TheLines' && sgc.checked === '2026-11-12T12:00:00Z' && sgc.tiers.length === 8, 'reports: SGC dated by the newest confirmed report (TheLines, Nov 12)');
+  ok(sgc.tiers[7][1] === '$3,750 + $375 per $10k' && sgc.tiers.every(t => t[5] === 'open'), 'reports: a tier we already show keeps its wording; no site marks SGC status, so it stays as it was');
+  ok(bgs.from === 'report' && bgs.by === 'CardGrading.app' && bgs.checked === '2026-11-06T12:00:00Z', 'reports: Beckett dated by CardGrading.app (Nov 6); TCGrader only confirms prices');
+  ok(bgs.tiers.map(t => t[5]).join() === 'sold,sold,sold,open,sold', 'reports: Beckett sold-out marks applied, unmarked tiers keep their last status');
+  ok(r.companies.PSA.checked === require('./grading-seed.json').companies.PSA.checked || r.companies.PSA.from !== 'report', 'reports: companies without report sites are untouched');
+  // one site alone with a new price is not enough
+  const lone = rx('thelines-sgc').replace('Standard $1,500 $50', 'Standard $1,500 $60').replace('November 12, 2026', 'November 18, 2026');
+  const s2 = {}; const gh2 = { download: async (t, n) => s2[n] || null, put: async (t, n, b) => { s2[n] = b; } };
+  const r2 = await G.runGrading({ gh: gh2, readFetch: mk({ 'www.thelines.com': lone }), fetch: mk(), now: Date.parse('2026-11-19T12:00:00Z'), log: () => {} });
+  ok(r2.companies.SGC.by === 'AA Mint Store' && r2.companies.SGC.tiers[0][1] === '$50', 'reports: a new price shown by only one site is not used; the next confirmed report is');
+  // a challenge page (Cloudflare / Vercel checkpoint) is never read as prices
+  ok(G.REPORTS.SGC[0].read('<title>Vercel Security Checkpoint</title>') === null && G.REPORTS.BGS[0].read('Just a moment...') === null, 'reports: a challenge page is not read as prices');
+  // a report older than what we already show changes nothing
+  const r3 = await G.runGrading({ gh, readFetch: mk(), fetch: mk(), now: Date.parse('2026-11-20T12:00:00Z'), log: () => {} });
+  ok(r3.companies.SGC.checked === '2026-11-12T12:00:00Z' && r3.companies.SGC.tried === '2026-11-20T12:00:00.000Z', 'reports: no newer report keeps the last good data and its date');
+};
 const dealsRun = async () => {
   const D = require('./deals');
   const files = {};
@@ -223,5 +253,6 @@ const quiet = () => {};
   ok(JSON.parse(store2.state['state.json']).req.n === 18 + 3, 'requests counted across runs (first run 18, last run 3)');
   await dealsRun();
   await gradingRun();
+  await reportsRun();
   console.log('minty-prices: ' + n + ' checks passed');
 })().catch(e => { console.error(e); process.exit(1); });

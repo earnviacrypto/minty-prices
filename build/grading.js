@@ -1,11 +1,14 @@
 // Grading companies: every tier, price, wait and status, read once a day from each company's own price page.
 // Several sites block automated readers, so each page is tried three ways: straight, through a text reader (r.jina.ai),
 // and the newest copy on the Wayback Machine. A company that can't be read keeps what it showed last, with that date.
+// Beckett and SGC block all of those, so for them hobby price-guide sites that print a dated copy of the price list are read too
+// (only sites GitHub can open with no Cloudflare/Vercel challenge). The newest dated report is used only when a second source
+// shows the same tiers and prices, and only a site that marks a tier sold out or open can change that tier's status.
 // Output: prices/grading.json  { v, updated, companies: { PSA: { checked, tried, from, archived?, tiers: [[name, price, cover, wait, min, status]] } } }
 const { GitHub } = require('./gh');
 const SEED = require('./grading-seed.json');
 
-const GRADING_VERSION = 1;
+const GRADING_VERSION = 2; // 2: Beckett and SGC also read from dated report sites
 const ORDER = ['PSA', 'CGC', 'BGS', 'SGC', 'TAG'];
 const PAGES = {
   PSA: 'https://www.psacard.com/services/tradingcardgrading',
@@ -71,6 +74,95 @@ const READ = {
   },
 };
 
+// ---- report sites for the companies whose own pages can't be read ----
+const MONTHS = 'January February March April May June July August September October November December'.split(' ');
+const isoDay = s => { const m = String(s).match(/([A-Z][a-z]+)\.? (\d{1,2}),? (\d{4})/); if (!m) return null; const i = MONTHS.findIndex(x => x.startsWith(m[1].slice(0, 3))); return i < 0 ? null : `${m[3]}-${String(i + 1).padStart(2, '0')}-${m[2].padStart(2, '0')}`; };
+const wait = s => String(s).replace(/\s*(?:-|to)\s*/, '–') + ' business days';
+const BGS_NAME = s => /no subgrades|no sub/i.test(s) ? 'Base' : /base/i.test(s) ? 'Base + sub-grades' : s;
+const REPORTS = {
+  SGC: [
+    { by: 'TheLines', url: 'https://www.thelines.com/card-rips/grading/sgc/', read(text) {
+      const t = flat(text), date = isoDay((t.match(/Last Updated on (\w+ \d+, \d{4})/) || [])[1]), out = [];
+      const re = /(Standard|Expedited) \$([\d,]+)(\+?) (?:Up to )?\$([\d,]+) (\d+\+|\d+\s*-\s*\d+) business days/g; let m;
+      while ((m = re.exec(t))) out.push([m[1], money(m[4]), m[3] ? 'over $' + m[2] : '$' + m[2], wait(m[5]), '', null]);
+      return date && out.length >= 3 ? { date, tiers: out } : null;
+    } },
+    { by: 'AA Mint Store', url: 'https://www.aamintstore.com/sgc-grading-cost-and-how-to-submit-your-cards/', read(text) {
+      const t = flat(text), date = isoDay((t.match(/prices SGC lists as of (\w+ \d+, \d{4})/) || [])[1]), out = [];
+      const re = /(Standard|Expedited) \$([\d,]+) (over )?\$([\d,]+) (\d+\+|\d+ to \d+) business days/g; let m;
+      while ((m = re.exec(t))) out.push([m[1], money(m[2]), (m[3] ? 'over ' : '') + '$' + m[4], wait(m[5]), '', null]);
+      return date && out.length >= 3 ? { date, tiers: out } : null;
+    } },
+    { by: 'CardGrade', url: 'https://cardgrade.io/sgc-grading', read(text) {
+      const t = flat(text), date = isoDay((t.match(/last verified (\w+ \d+, \d{4})/) || [])[1]), out = [];
+      const re = /(Standard|Expedited) \$([\d,]+)\+? (?:per card|base fee) (\d+\+|\d+\s*[–-]\s*\d+) business days (?:\$([\d,]+) maximum declared value|More than \$([\d,]+))/g; let m;
+      while ((m = re.exec(t))) out.push([m[1], money(m[2]), m[4] ? '$' + m[4] : 'over $' + m[5], wait(m[3]), '', null]);
+      return date && out.length >= 3 ? { date, tiers: out } : null;
+    } },
+  ],
+  BGS: [
+    { by: 'CardGrading.app', url: 'https://cardgrading.app/beckett-grading-cost', read(text) {
+      const t = flat(text), date = isoDay((t.match(/Availability as of (\w+ \d+, \d{4})/) || t.match(/As of (\w+ \d+, \d{4}), Beckett lists/) || [])[1]), out = [];
+      const re = /(Base \(no subgrades\)|Base \(with subgrades\)|Standard|Express|Priority) (Sold out \([^)]*\) |Open \([^)]*\) )?\$([\d.]+) (\d+\+?) (?:Not included|Included)/g; let m;
+      while ((m = re.exec(t)) && out.length < 5) out.push([BGS_NAME(m[1]), money(m[3]), '', wait(m[4]), '', !m[2] ? null : /sold/i.test(m[2]) ? 'sold' : 'open']);
+      return date && out.length >= 3 ? { date, tiers: out } : null;
+    } },
+    { by: 'CardGrade', url: 'https://cardgrade.io/beckett-grading', read(text) {
+      const t = flat(text), date = isoDay((t.match(/last verified (\w+ \d+, \d{4})/) || [])[1]), out = [], seen = new Set();
+      const re = /(Base - No Subgrades|Base - With Subgrades|Standard|Express|Priority) \$([\d.]+) per card (\d+\+?) business days (.{0,90})/g; let m;
+      while ((m = re.exec(t))) {
+        const name = BGS_NAME(m[1]); if (seen.has(name)) continue; seen.add(name);
+        out.push([name, money(m[2]), '', wait(m[3]), '', /paused|sold out/i.test(m[4]) ? 'sold' : /^Open\b/.test(m[4]) ? 'open' : null]);
+      }
+      return date && out.length >= 3 ? { date, tiers: out } : null;
+    } },
+    // shows Beckett's prices but never marks a Beckett tier paused, so it only ever confirms prices
+    { by: 'TCGrader', url: 'https://www.tcgrader.com/card-grading-costs', confirmOnly: true, read(text) {
+      const t = flat(text), i = t.indexOf('Beckett (BGS) grading cost'), out = [];
+      if (i < 0) return null;
+      const re = /(Base with Subgrades|Base|Standard|Express|Priority) \$([\d.]+) ~/g; re.lastIndex = i; let m;
+      while ((m = re.exec(t)) && out.length < 5) out.push([m[1] === 'Base with Subgrades' ? 'Base + sub-grades' : m[1], money(m[2]), '', '', '', null]);
+      return out.length >= 3 ? { date: isoDay((t.match(/updated (\d{1,2}) (\w+) (\d{4})/) || []).slice(1).reverse().join(' ').replace(/^(\d{4}) (\w+) (\d+)$/, '$2 $3, $1')), tiers: out } : null;
+    } },
+  ],
+};
+
+// Same tiers at the same prices (status, wording and waits aside)?
+const num = p => (String(p).replace(/,/g, '').match(/\d+(?:\.\d+)?/) || [''])[0];
+const sig = tiers => tiers.filter(t => t[5] !== 'paused').map(t => t[0] + '|' + num(t[1])).sort().join(';');
+const agree = (a, b) => !!a && !!b && sig(a) === sig(b);
+
+// Newest dated report that a second source (another report, or what we already show) agrees with.
+async function readReports(code, fetchFn, old, log) {
+  const got = [];
+  for (const r of REPORTS[code] || []) {
+    let text = null;
+    try { const res = await fetchFn(r.url, { headers: { 'user-agent': UA, accept: 'text/html' }, signal: AbortSignal.timeout(40000) }); text = res.ok ? await res.text() : null; } catch (_) {}
+    const rep = text && r.read(text);
+    log(`${code}: ${r.by} ${rep ? rep.tiers.length + ' tiers, ' + (rep.date || 'no date') : 'unreadable'}`);
+    if (rep) got.push(Object.assign({ by: r.by, url: r.url, confirmOnly: !!r.confirmOnly }, rep));
+  }
+  const oldTiers = old && old.tiers;
+  const picks = got.filter(r => !r.confirmOnly && r.date).sort((a, b) => b.date.localeCompare(a.date));
+  for (const p of picks) {
+    if (got.some(r => r !== p && agree(r.tiers, p.tiers)) || agree(oldTiers, p.tiers)) return p;
+    log(`${code}: ${p.by} (${p.date}) not confirmed by a second source`);
+  }
+  return null;
+}
+
+// A report's tiers in our wording: a tier we already show keeps its text; status comes from the report only where it marks one.
+function fromReport(rep, oldTiers) {
+  const pool = (oldTiers || []).slice();
+  return rep.tiers.map(t => {
+    const i = pool.findIndex(o => o[0] === t[0] && num(o[1]) === num(t[1]));
+    const o = i >= 0 ? pool.splice(i, 1)[0] : null;
+    const row = o ? o.slice() : t.slice();
+    row[5] = t[5] || (o && o[5] !== 'paused' ? o[5] : 'open');
+    return row;
+  });
+}
+
 // Tiers the page no longer lists stay in the list as "not offered now", with the last price seen.
 function mergeTiers(fresh, old) {
   const key = t => t[0] + '|' + t[1];
@@ -120,7 +212,7 @@ async function readCompany(code, fetchFn, log) {
 
 // Once per Eastern day, from 6 AM on.
 function due(prev, now) {
-  if (!prev || !prev.updated) return true;
+  if (!prev || !prev.updated || (prev.v || 1) < GRADING_VERSION) return true; // a new reader runs at once
   const et = d => new Date(new Date(d).toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const n = et(now), p = et(prev.updated);
   if (n.getHours() < 6) return false;
@@ -139,17 +231,21 @@ async function runGrading(env = {}) {
   const companies = {};
   for (const code of ORDER) {
     const old = (prev && prev.companies && prev.companies[code]) || SEED.companies[code];
+    const oldAt = old.checked ? Date.parse(old.checked) : 0;
     const got = await readCompany(code, env.readFetch || fetchFn, log);
-    if (got) {
-      // an archive copy older than what we already have doesn't replace it
-      if (got.from === 'archive' && old.checked && Date.parse(got.archived) <= Date.parse(old.checked)) { companies[code] = Object.assign({}, old, { tried: iso }); continue; }
-      companies[code] = { checked: got.from === 'archive' ? got.archived : iso, tried: iso, from: got.from, archived: got.archived || undefined, tiers: mergeTiers(got.tiers, old.tiers) };
-    } else companies[code] = Object.assign({}, old, { tried: iso });
+    if (got && got.from === 'site') { companies[code] = { checked: iso, tried: iso, from: 'site', tiers: mergeTiers(got.tiers, old.tiers) }; continue; }
+    // no live read: take the newest of an archive copy and a confirmed report, if it is newer than what we already show
+    let best = null;
+    if (got && Date.parse(got.archived) > oldAt) best = { checked: got.archived, from: 'archive', archived: got.archived, tiers: mergeTiers(got.tiers, old.tiers) };
+    const rep = REPORTS[code] ? await readReports(code, env.readFetch || fetchFn, old, log) : null;
+    const repAt = rep ? `${rep.date}T12:00:00Z` : null;
+    if (rep && Date.parse(repAt) > oldAt && (!best || Date.parse(repAt) > Date.parse(best.checked))) best = { checked: repAt, from: 'report', by: rep.by, byUrl: rep.url, tiers: mergeTiers(fromReport(rep, old.tiers), old.tiers) };
+    companies[code] = best ? Object.assign({ tried: iso }, best) : Object.assign({}, old, { tried: iso });
   }
   const out = { v: GRADING_VERSION, updated: iso, companies };
   await gh.put('prices', 'grading.json', Buffer.from(JSON.stringify(out)));
   return out;
 }
 
-module.exports = { runGrading, READ, mergeTiers, due, flat, PAGES, ORDER, GRADING_VERSION };
+module.exports = { runGrading, READ, REPORTS, readReports, fromReport, agree, isoDay, mergeTiers, due, flat, PAGES, ORDER, GRADING_VERSION };
 if (require.main === module) runGrading({ force: process.argv.includes('--force') }).catch(e => { console.error(e); process.exit(1); });
