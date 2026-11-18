@@ -16,6 +16,22 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(JSON.stringify(Hist.unpack('2024-02-08', b['1|Normal'])) === JSON.stringify([['2024-02-10', 1.2], ['2024-02-13', 1.5], ['2024-02-15', 1.75]]), 'unpacked back to dates and dollars');
 }
 
+
+// ---- grading companies ----
+{
+  const G = require('./grading');
+  const fx = c => fs.readFileSync(path.join(__dirname, 'fixtures', c + '.txt'), 'utf8');
+  const psa = G.READ.PSA(fx('psa')), tag = G.READ.TAG(fx('tag')), bgs = G.READ.BGS(fx('bgs'));
+  ok(psa && psa.length === 11 && psa[0].join('|') === 'Value|$39.99|$500|90–100 business days||open' && psa[10][1] === '$9,999+' && psa[10][2] === 'over $250,000', 'PSA page: every listed tier with price, cover and wait');
+  ok(tag && tag.length === 6 && tag[0].join('|') === 'Value|$29.95|$250|90 business days|10 cards|open' && tag[5][2] === '$5,000', 'TAG page: tiers with card minimums and protection');
+  ok(bgs && bgs.length === 5 && bgs.filter(t => t[5] === 'sold').length === 4 && bgs[3].join('|') === 'Express|$79.95||15 business days||open' && bgs[0][4] === 'No sub-grades', 'Beckett page: sold-out tiers marked, the two Base prices told apart');
+  ok(G.READ.PSA('Just a moment...') === null && G.READ.BGS('<title>Just a moment...</title>') === null, 'a blocked page is not read as prices');
+  const merged = G.mergeTiers(psa, require('./grading-seed.json').companies.PSA.tiers);
+  ok(merged.length === 14 && merged[0][0] === 'Value Bulk' && merged[0][5] === 'paused' && merged[0][4] === '50 cards, Collectors Club' && merged[1][0] === 'Value', 'tiers no longer listed stay, marked paused, in their old place');
+  const at = s => Date.parse(s);
+  ok(G.due(null, at('2026-11-18T12:00:00Z')) && !G.due({ updated: '2026-11-18T11:05:00Z' }, at('2026-11-18T20:00:00Z')) && G.due({ updated: '2026-11-18T11:05:00Z' }, at('2026-11-19T11:30:00Z')) && !G.due({ updated: '2026-11-18T11:05:00Z' }, at('2026-11-19T10:30:00Z')), 'checked once a day, from 6 AM Eastern');
+}
+
 // ---- market indexes ----
 {
   const { categoryIndexes, sizeFor } = require('./indexes');
@@ -74,6 +90,18 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
 }
 
 // ---- deal finder run (fake GitHub, fake eBay) ----
+
+const gradingRun = async () => {
+  const G = require('./grading');
+  const store = {}; const gh = { download: async (t, n) => store[n] || null, put: async (t, n, b) => { store[n] = b; } };
+  const pages = { 'www.psacard.com': fs.readFileSync(path.join(__dirname, 'fixtures', 'psa.txt'), 'utf8') };
+  const readFetch = async (u) => { const host = new URL(u.replace('https://r.jina.ai/', '')).host; const body = u.startsWith('https://r.jina.ai/') && pages[host] ? pages[host] : '<title>Just a moment...</title>'; if (/archive\.org\/wayback/.test(u)) return { ok: true, json: async () => ({ archived_snapshots: {} }) }; return { ok: true, text: async () => body }; };
+  const r = await G.runGrading({ gh, readFetch, fetch: readFetch, now: Date.parse('2026-11-19T12:00:00Z'), log: () => {} });
+  ok(r.companies.PSA.from === 'site' && r.companies.PSA.checked === '2026-11-19T12:00:00.000Z' && r.companies.PSA.tiers.length === 14, 'grading run: a readable page is used and dated today');
+  ok(r.companies.CGC.checked === '2026-09-29T12:00:00Z' && r.companies.CGC.tried === '2026-11-19T12:00:00.000Z' && r.companies.CGC.tiers.length === 6, 'grading run: a blocked company keeps its last tiers and their date');
+  const again = await G.runGrading({ gh, readFetch, fetch: readFetch, now: Date.parse('2026-11-19T15:00:00Z'), log: () => {} });
+  ok(again.skipped && JSON.parse(store['grading.json']).updated === '2026-11-19T12:00:00.000Z', 'grading run: only once a day');
+};
 const dealsRun = async () => {
   const D = require('./deals');
   const files = {};
@@ -192,5 +220,6 @@ const quiet = () => {};
   ok(!calls.some(u => /ppmd/.test(u) && /2026-11-1[0-4]/.test(u)) && !store2.state['archive-2026-11-14.7z'] && JSON.parse(store2.state['state.json']).archives['2026-11-14'] === 3, 'fixed reader: the kept archive is used, TCGCSV not asked again for any day already read');
   ok(JSON.parse(store2.state['state.json']).req.n === 18 + 3, 'requests counted across runs (first run 18, last run 3)');
   await dealsRun();
+  await gradingRun();
   console.log('minty-prices: ' + n + ' checks passed');
 })().catch(e => { console.error(e); process.exit(1); });

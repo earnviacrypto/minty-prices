@@ -6,29 +6,11 @@ on:
 permissions:
   contents: write
 jobs:
-  pages:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Read the grading companies' price pages
-        run: |
-          mkdir -p out
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
-          while read -r name url; do
-            curl -sL -m 60 -o "out/$name.avail.json" "https://archive.org/wayback/available?url=$url" || true
-            snap=$(python3 -c "import json,sys;d=json.load(open('out/$name.avail.json'));c=d.get('archived_snapshots',{}).get('closest',{});print(c.get('url',''))" 2>/dev/null)
-            echo "$name snapshot $snap"
-            [ -n "$snap" ] && curl -sL -m 60 -o "out/$name.wb.html" "$(echo $snap | sed -E 's#/web/([0-9]+)/#/web/\1id_/#')" || true
-            curl -sL -m 120 -o "out/$name.save.html" -w "$name save %{http_code}\n" "https://web.archive.org/save/$url" || echo "$name save fail"
-          done <<'LIST'
-          cgc https://www.cgccards.com/submit/services-and-fees/
-          bgs https://www.beckett.com/grading
-          sgc https://gosgc.com/card-grading/services-pricing
-          LIST
-          ls -la out
-      - name: Publish
+      - name: Remove the temporary page copies
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          gh release view ref >/dev/null 2>&1 || gh release create ref --title ref --notes "temporary"
-          tar czf pages.tgz out && gh release upload ref pages.tgz --clobber
+        run: gh release delete ref --yes --cleanup-tag || true

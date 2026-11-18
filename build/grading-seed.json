@@ -1,0 +1,54 @@
+{
+  "_note": "Starting point for the Grading page. The daily reader replaces a company's tiers whenever it can read that company's own price page; until then these are shown with their 'checked' date.",
+  "companies": {
+    "PSA": { "checked": "2026-11-18T20:40:00Z", "from": "site", "tiers": [
+      ["Value Bulk", "$24.99", "", "", "50 cards, Collectors Club", "paused"],
+      ["Value", "$39.99", "$500", "90–100 business days", "", "open"],
+      ["Value Plus", "$49.99", "", "", "", "paused"],
+      ["Value Max", "$64.99", "$1,500", "", "", "paused"],
+      ["Standard", "$59.99", "$1,000", "70–80 business days", "", "open"],
+      ["Priority", "$79.99", "$1,500", "50–60 business days", "", "open"],
+      ["Express", "$199", "$2,500", "20–30 business days", "", "open"],
+      ["Super Express", "$349", "$5,000", "10–15 business days", "", "open"],
+      ["Premier", "$599", "$10,000", "7–10 business days", "", "open"],
+      ["Premium 1", "$999", "$25,000", "5–7 business days", "", "open"],
+      ["Premium 2", "$1,999", "$50,000", "5–7 business days", "", "open"],
+      ["Premium 3", "$2,999", "$100,000", "5–7 business days", "", "open"],
+      ["Premium 5", "$4,999", "$250,000", "5–7 business days", "", "open"],
+      ["Premium 10", "$9,999+", "over $250,000", "5–7 business days", "", "open"]
+    ]},
+    "CGC": { "checked": "2026-09-29T12:00:00Z", "from": "report", "tiers": [
+      ["Bulk", "$17", "$500", "150 working days", "25 cards", "open"],
+      ["Economy", "$20", "$1,000", "90 working days", "", "open"],
+      ["Standard", "$55", "$3,000", "10 working days", "", "open"],
+      ["Express", "$100", "$10,000", "5 working days", "", "open"],
+      ["WalkThrough", "$300", "$100,000", "2 working days", "", "open"],
+      ["Unlimited", "$300 + 1% of value", "any value", "2 working days", "", "open"]
+    ]},
+    "BGS": { "checked": "2026-10-29T04:37:00Z", "from": "archive", "tiers": [
+      ["Base", "$14.95", "", "75+ business days", "No sub-grades", "sold"],
+      ["Base + sub-grades", "$17.95", "", "75+ business days", "", "sold"],
+      ["Standard", "$34.95", "", "45 business days", "", "sold"],
+      ["Express", "$79.95", "", "15 business days", "", "open"],
+      ["Priority", "$124.95", "", "5 business days", "", "sold"]
+    ]},
+    "SGC": { "checked": "2026-09-29T12:00:00Z", "from": "report", "tiers": [
+      ["Standard", "$50", "$1,500", "40+ business days", "", "open"],
+      ["Standard", "$85", "$3,500", "40+ business days", "", "open"],
+      ["Expedited", "$150", "$3,500", "2–3 business days", "", "open"],
+      ["Expedited", "$250", "$7,500", "2–3 business days", "", "open"],
+      ["Expedited", "$500", "$20,000", "2–3 business days", "", "open"],
+      ["Expedited", "$1,000", "$50,000", "2–3 business days", "", "open"],
+      ["Expedited", "$2,000", "$100,000", "2–3 business days", "", "open"],
+      ["Expedited", "$3,750 + $375 per $10k", "over $100,000", "2–3 business days", "", "open"]
+    ]},
+    "TAG": { "checked": "2026-11-18T20:40:00Z", "from": "site", "tiers": [
+      ["Value", "$29.95", "$250", "90 business days", "10 cards", "open"],
+      ["Base", "$39.95", "$500", "60 business days", "5 cards", "open"],
+      ["Standard", "$59.95", "$1,000", "45 business days", "", "open"],
+      ["Priority", "$79.95", "$1,500", "30 business days", "", "open"],
+      ["Express", "$149.95", "$2,500", "10 business days", "", "open"],
+      ["Premier", "$299.95", "$5,000", "3–5 business days", "", "open"]
+    ]}
+  }
+}

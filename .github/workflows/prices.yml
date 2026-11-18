@@ -40,6 +40,11 @@ jobs:
           EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
           EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: Grading companies
+        if: always()
+        run: node build/grading.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Next run
         # GitHub's hourly schedule can be skipped for days, so the job keeps itself going:
         # wait until about an hour after this run started, then start the next run if none is waiting.
