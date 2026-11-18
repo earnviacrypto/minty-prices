@@ -2,7 +2,7 @@ name: ref
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/ref.yml', 'ref.txt']
+    paths: ['.github/workflows/ref.yml', 'ref.txt', 'ref.py']
 permissions:
   contents: write
 jobs:
@@ -11,28 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch reference slab photos
-        run: |
-          mkdir -p out
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
-          while IFS='|' read -r name url; do
-            [ -z "$name" ] && continue
-            curl -sL -A "$UA" -m 40 "$url" -o "out/$name.html" || true
-            echo "$name $(wc -c < out/$name.html)"
-            python3 - "$name" "$url" <<'PY' > urls.txt
-          import re,sys,urllib.parse
-          n,base=sys.argv[1],sys.argv[2]
-          h=open('out/'+n+'.html',errors='ignore').read()
-          seen=[]
-          for m in re.findall(r'(?:src|data-src|srcset|href)=["\']([^"\' ]+\.(?:jpg|jpeg|png|webp)[^"\' ]*)',h,re.I):
-              u=urllib.parse.urljoin(base,m.split(' ')[0])
-              if re.search(r'slab|label|holder|graded|grade|psa|cgc|bgs|sgc|tag|pokemon|card',u,re.I) and u not in seen: seen.append(u)
-          print('\n'.join(seen[:25]))
-          PY
-            k=0; while read -r u; do k=$((k+1)); ext=$(echo "${u%%\?*}" | sed -E 's/.*\.//' | cut -c1-4); curl -sL -A "$UA" -m 30 -o "out/$name-$k.$ext" "$u"; done < urls.txt
-          done < ref.txt
-          curl -sL -m 40 "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=graded%20card%20slab&gsrlimit=20&prop=imageinfo&iiprop=url&iiurlwidth=900&format=json" -o out/commons.json || true
-          find out -size -3k -delete
-          ls -la out
+        run: python3 ref.py
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
