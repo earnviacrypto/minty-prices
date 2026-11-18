@@ -31,7 +31,9 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   const merged = G.mergeTiers(psa, require('./grading-seed.json').companies.PSA.tiers);
   ok(merged.length === 14 && merged[0][0] === 'Value Bulk' && merged[0][5] === 'paused' && merged[0][4] === '50 cards, Collectors Club' && merged[1][0] === 'Value', 'tiers no longer listed stay, marked paused, in their old place');
   const at = s => Date.parse(s);
-  ok(G.due(null, at('2026-11-18T12:00:00Z')) && !G.due({ updated: '2026-11-18T11:05:00Z' }, at('2026-11-18T20:00:00Z')) && G.due({ updated: '2026-11-18T11:05:00Z' }, at('2026-11-19T11:30:00Z')) && !G.due({ updated: '2026-11-18T11:05:00Z' }, at('2026-11-19T10:30:00Z')), 'checked once a day, from 6 AM Eastern');
+  const V = G.GRADING_VERSION;
+  ok(G.due(null, at('2026-11-18T12:00:00Z')) && !G.due({ v: V, updated: '2026-11-18T11:05:00Z' }, at('2026-11-18T20:00:00Z')) && G.due({ v: V, updated: '2026-11-18T11:05:00Z' }, at('2026-11-19T11:30:00Z')) && !G.due({ v: V, updated: '2026-11-18T11:05:00Z' }, at('2026-11-19T10:30:00Z')), 'checked once a day, from 6 AM Eastern');
+  ok(G.due({ v: V - 1, updated: '2026-11-18T11:05:00Z' }, at('2026-11-18T20:00:00Z')), 'a new reader runs at once, not tomorrow');
 }
 
 // ---- market indexes ----
