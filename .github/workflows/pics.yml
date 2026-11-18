@@ -1,0 +1,23 @@
+name: mockup pictures
+on:
+  push:
+    branches: [mockpics]
+    paths: [ids.txt]
+permissions:
+  contents: write
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p pics
+          while read id; do
+            [ -z "$id" ] && continue
+            curl -sfL -A "MintyPrices/1.0" -o "pics/$id.jpg" "https://tcgplayer-cdn.tcgplayer.com/product/${id}_in_400x400.jpg" || rm -f "pics/$id.jpg"
+            sleep 0.2
+          done < ids.txt
+          curl -sfL -o dotgg-riftbound.json "https://api.dotgg.gg/cgfw/getcards?game=riftbound" || true
+          ls -la pics | head -50
+          git config user.name "minty-bot"; git config user.email "minty-bot@users.noreply.github.com"
+          git add pics dotgg-riftbound.json; git commit -m "pictures [skip ci]" && git push
