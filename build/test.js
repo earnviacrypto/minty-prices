@@ -16,6 +16,24 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(JSON.stringify(Hist.unpack('2024-02-08', b['1|Normal'])) === JSON.stringify([['2024-02-10', 1.2], ['2024-02-13', 1.5], ['2024-02-15', 1.75]]), 'unpacked back to dates and dollars');
 }
 
+// ---- market indexes ----
+{
+  const { categoryIndexes, sizeFor } = require('./indexes');
+  const h = new Hist('2024-02-08');
+  // 70 cards that trade (price moves every day, card i worth i dollars, all up 10% over the period), 30 that never move
+  const D = 200;
+  for (let i = 1; i <= 70; i++) for (let d = 0; d < D; d++) h.set(i + '|Normal', 5, d, Math.round(i * 100 * (1 + 0.1 * d / (D - 1)) + (d % 2)));
+  for (let i = 71; i <= 100; i++) for (let d = 0; d < D; d++) h.set(i + '|Normal', 5, d, 900000);
+  const pf = { groups: [{ groupId: 5, name: 'Set X' }], products: { 5: Array.from({ length: 100 }, (_, k) => [k + 1, 'Card ' + (k + 1), String(k + 1), 'Rare', '', 1]) } };
+  const r = categoryIndexes(h, pf, '2024-02-08');
+  ok(r.cards && r.cards.n === 20 && r.sealed === null, 'index size from how many trade: 70 trading cards → 20; no sealed → no index');
+  ok(r.cards.values[0] === 1000, 'starts at 1,000');
+  const last = r.cards.values[r.cards.values.length - 1];
+  ok(last > 1080 && last < 1120, 'follows the cards (~+10%): ' + last);
+  ok(!r.cards.up.concat(r.cards.down).some(x => x.id > 70), 'cards whose price never moves are left out');
+  ok(sizeFor('card', 500) === 100 && sizeFor('sealed', 30) === 10 && sizeFor('card', 10) === 0, 'sizes');
+}
+
 // ---- fake TCGCSV ----
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mpt-'));
 const START = '2026-11-10';

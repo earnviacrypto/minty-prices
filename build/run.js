@@ -9,6 +9,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), zlib = req
 const { execFileSync } = require('child_process');
 const { Hist, dayIndex, dateOf } = require('./hist');
 const { GitHub, sleep } = require('./gh');
+const { IX_VERSION, categoryIndexes } = require('./indexes');
 
 const TC = 'https://tcgcsv.com';
 // Raise this when the archive reader is changed, so an archive it could not read is tried again (from our own copy).
@@ -61,6 +62,26 @@ async function main(env = {}) {
   const sevenZip = env.sevenZip || '7z';
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'minty-'));
   const START = cfg.archiveStart;
+  // Market indexes (history/indexes.json.gz): rebuilt for the categories whose history changed, or for all of them
+  // when the file is missing or its version is old. A category not kept in memory is read, used and dropped.
+  const publishIndexes = async (cats, keep) => {
+    const buf = await gh.download('history', 'indexes.json.gz');
+    let ix = null; try { ix = buf ? JSON.parse(zlib.gunzipSync(buf)) : null; } catch (_) {}
+    if (!ix || ix.v !== IX_VERSION) { ix = { v: IX_VERSION, start: START, cats: {} }; cats = state.cats && state.cats.length ? state.cats.slice() : cfg.categories.slice(); }
+    for (const cat of cats) {
+      try {
+        let h = keep && keep[cat];
+        if (!h) { const b = await gh.download('state', `hist-${cat}.bin.gz`); if (!b) continue; h = Hist.decode(b, START); }
+        const pb = await gh.download('prices', `prices-${cat}.json.gz`); if (!pb) continue;
+        const r = categoryIndexes(h, JSON.parse(zlib.gunzipSync(pb)), START);
+        ix.cats[cat] = { days: r.days, cards: r.cards, sealed: r.sealed };
+      } catch (e) { log('index', cat, e.message); }
+    }
+    ix.built = new Date().toISOString();
+    await gh.put('history', 'indexes.json.gz', zlib.gzipSync(Buffer.from(JSON.stringify(ix)), { level: 9 }));
+    log(`Market indexes built for ${cats.length} categories.`);
+    return ix;
+  };
 
   const stateBuf = await gh.download('state', 'state.json');
   const state = stateBuf ? JSON.parse(stateBuf) : { lastPull: null, apiStart: null, archives: {}, cats: cfg.categories.slice() };
@@ -82,6 +103,7 @@ async function main(env = {}) {
   if (needPull && !budgetOk) log(`Not reading prices now: ${state.req.n} TCGCSV requests made today already.`);
   log(`TCGCSV updated ${upd}; last pull ${state.lastPull || 'never'}; archive days left ${backlog.length}`);
   if (needPull && !budgetOk) needPull = false;
+  if (!needPull && !backlog.length && (state.ixVersion || 0) !== IX_VERSION) { await publishIndexes([]); state.ixVersion = IX_VERSION; await gh.put('state', 'state.json', Buffer.from(JSON.stringify(state))); return { did: true, state, indexes: true }; }
   if (!needPull && !backlog.length) { log('Nothing to do.' + (blocked ? ' (Archive reading stopped at ' + state.archiveError.day + ': ' + state.archiveError.message.split('\n')[0] + ')' : '')); return { did: false, state }; }
 
   // Our copy of the history, one file per category.
@@ -232,6 +254,10 @@ async function main(env = {}) {
   index.archiveDaysLeft = backlog.length;
   index.historyEnd = dateOf(START, Math.max(0, ...Object.values(index.categories).map(c => c.days)) - 1);
   await gh.put('history', 'index.json', Buffer.from(JSON.stringify(index)));
+  if (!backlog.length) { // indexes only once the whole history is in (they need it from the start)
+    const changed = Object.keys(hist).filter(c => hist[c].saved);
+    if (changed.length || (state.ixVersion || 0) !== IX_VERSION) { await publishIndexes(changed, hist); state.ixVersion = IX_VERSION; await gh.put('state', 'state.json', Buffer.from(JSON.stringify(state))); }
+  }
   await gh.writeFile('status.json', JSON.stringify({ pricesUpdated: state.lastPull, historyFrom: START, historyTo: index.historyEnd, archiveDaysLeft: backlog.length, categories: state.cats, built: index.built }, null, 2) + '\n', 'Daily data ' + (state.lastPull || '').slice(0, 10));
   fs.rmSync(tmp, { recursive: true, force: true });
   log(`Done. TCGCSV requests ${tc.count}, GitHub calls ${gh.calls}, archive days read ${read}, left ${backlog.length}.`);
