@@ -14,16 +14,15 @@ jobs:
           mkdir -p out
           UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
           while read -r name url; do
-            curl -sL -A "$UA" -m 40 -o "out/$name.direct.html" -w "$name direct %{http_code} %{size_download}\n" "$url" || echo "$name direct fail"
-            curl -sL -m 60 -H 'Accept: text/plain' -o "out/$name.jina.txt" -w "$name jina %{http_code} %{size_download}\n" "https://r.jina.ai/$url" || echo "$name jina fail"
+            curl -sL -m 60 -o "out/$name.avail.json" "https://archive.org/wayback/available?url=$url" || true
+            snap=$(python3 -c "import json,sys;d=json.load(open('out/$name.avail.json'));c=d.get('archived_snapshots',{}).get('closest',{});print(c.get('url',''))" 2>/dev/null)
+            echo "$name snapshot $snap"
+            [ -n "$snap" ] && curl -sL -m 60 -o "out/$name.wb.html" "$(echo $snap | sed -E 's#/web/([0-9]+)/#/web/\1id_/#')" || true
+            curl -sL -m 120 -o "out/$name.save.html" -w "$name save %{http_code}\n" "https://web.archive.org/save/$url" || echo "$name save fail"
           done <<'LIST'
-          psa https://www.psacard.com/services/tradingcardgrading
-          psa-pricing https://www.psacard.com/pricing
           cgc https://www.cgccards.com/submit/services-and-fees/
           bgs https://www.beckett.com/grading
-          bgs-gaming https://www.beckett.com/gaming-grading
           sgc https://gosgc.com/card-grading/services-pricing
-          tag https://taggrading.com/pages/pricing
           LIST
           ls -la out
       - name: Publish
