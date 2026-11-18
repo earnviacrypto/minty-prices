@@ -1,0 +1,8 @@
+{
+  "comment": "TCGplayer category numbers on TCGCSV that Minty uses. Any category numbered above lastKnownCategory (a game TCGplayer adds later) is included automatically.",
+  "categories": [1, 2, 3, 16, 17, 20, 24, 25, 26, 27, 57, 58, 62, 63, 65, 66, 67, 68, 71, 72, 73, 74, 77, 79, 80, 81, 83, 85, 86, 87, 89, 91, 92],
+  "lastKnownCategory": 94,
+  "archiveStart": "2024-02-08",
+  "userAgent": "MintyPrices/1.0 (+https://github.com/earnviacrypto/minty-prices)",
+  "historyBucketBytes": 3000000
+}

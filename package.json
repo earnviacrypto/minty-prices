@@ -1,0 +1,7 @@
+{
+  "name": "minty-prices",
+  "private": true,
+  "description": "Daily copy of TCGplayer market prices (via TCGCSV) and their history, for Minty TCG Portfolio Tracker",
+  "scripts": { "test": "node build/test.js", "start": "node build/run.js" },
+  "engines": { "node": ">=20" }
+}
