@@ -1,5 +1,9 @@
-psa|PSA 10 Charizard Base Set Unlimited holo 4/102
-cgc|CGC 10 Pristine Pokemon card base set
-bgs|BGS 10 Black Label Pokemon card
-sgc|SGC 10 Pokemon card base set
-tag|TAG 10 Pristine Pokemon card slab
+psa|https://www.psacard.com/services/tradingcardgrading
+psa2|https://www.psacard.com/info/how-it-works
+cgc|https://www.cgccards.com/
+cgc2|https://www.cgccards.com/card-grading/holder/
+bgs|https://www.beckett.com/grading
+sgc|https://gosgc.com/
+sgc2|https://gosgc.com/card-grading
+tag|https://taggrading.com/
+tag2|https://taggrading.com/pages/slab
