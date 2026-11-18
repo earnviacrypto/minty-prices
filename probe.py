@@ -1,43 +1,35 @@
-# Temporary: which unblocked sources give grading prices for CGC, Beckett and SGC.
+# Temporary: round 2 – direct reads of the right pages, SGC's current app files.
 import re, json, time, urllib.request, urllib.parse, os
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
 os.makedirs('out', exist_ok=True)
 log = []
-def get(u, t=90):
+def get(u, t=60):
     try:
-        r = urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': UA}), timeout=t)
+        r = urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': UA, 'Accept': 'text/html,application/json,*/*'}), timeout=t)
         return r.status, r.read()
     except Exception as e:
         return getattr(e, 'code', 0), b''
-def blocked(b): return bool(re.search(rb'Just a moment|Attention Required|cf-browser-verification|challenge-platform', b[:20000]))
-PAGES = {'cgc': 'https://www.cgccards.com/submit/services-fees/cgc-grading/', 'bgs': 'https://www.beckett.com/grading', 'sgc': 'https://www.gosgc.com/card-grading/services-pricing'}
-# 1. ask the Archive for a fresh copy, then read the newest copy
-for k, u in PAGES.items():
-    s, b = get('https://web.archive.org/save/' + u, 180)
-    log.append(f'{k} save-now status {s} bytes {len(b)} blocked-copy {blocked(b)}')
-    time.sleep(20)
-    s, a = get('https://archive.org/wayback/available?url=' + urllib.parse.quote(u, safe=''))
-    try: snap = json.loads(a)['archived_snapshots']['closest']
-    except Exception: snap = {}
-    log.append(f'{k} newest copy {snap.get("timestamp")}')
-    if snap.get('url'):
-        s, b = get(re.sub(r'/web/(\d+)/', r'/web/\1id_/', snap['url'].replace('http:', 'https:')))
-        open(f'out/{k}.newest.html', 'wb').write(b)
-        log.append(f'{k} newest copy bytes {len(b)} blocked {blocked(b)} has$ {len(re.findall(rb"\$\s?\d", b))}')
-# 2. SGC: the app's own scripts (prices may be inside), straight and from the Archive
-for f in ['main-EAXSQEY6.js', 'chunk-SOCBGKAB.js', 'chunk-FK6H3RFT.js', 'chunk-XZCQGYIQ.js', 'chunk-TSRGIXR5.js']:
-    for base in ['https://www.gosgc.com/', 'https://web.archive.org/web/2026id_/https://www.gosgc.com/']:
-        s, b = get(base + f)
-        tag = 'direct' if base.startswith('https://www.gosgc') else 'archive'
-        log.append(f'sgc {f} {tag} status {s} bytes {len(b)} blocked {blocked(b)}')
-        if b and not blocked(b):
-            open(f'out/sgc-{tag}-{f}', 'wb').write(b)
-            hosts = sorted(set(re.findall(rb'https?://[a-z0-9.-]*(?:gosgc|sgc)[a-z0-9.-]*\.[a-z]+[^"\'\s]{0,60}', b)))[:30]
-            log.append('   hosts: ' + ' | '.join(h.decode('utf8', 'ignore') for h in hosts))
-# 3. CGC price announcements on its own news pages and sister sites
-for u in ['https://www.cgccards.com/news/', 'https://www.cgccomics.com/news/', 'https://www.cgcvideogames.com/en-US/news-and-events/news']:
-    s, b = get(u)
-    open('out/news-' + re.sub(r'\W+', '_', u)[:40] + '.html', 'wb').write(b)
-    log.append(f'news {u} status {s} bytes {len(b)} blocked {blocked(b)} fee-words {len(re.findall(rb"(?i)fee", b))}')
-open('out/log.txt', 'w').write('\n'.join(log))
-print('\n'.join(log))
+def blocked(b): return bool(re.search(rb'Just a moment|Attention Required|challenge-platform|cf_chl', b[:30000]))
+def save(name, b): open('out/' + name, 'wb').write(b)
+for name, u in [('cgc-fees', 'https://www.cgccards.com/submit/services-fees/cgc-grading/'), ('cgc-fees2', 'https://www.cgccards.com/submit/services-fees/'),
+                ('bgs', 'https://www.beckett.com/grading'), ('bgs2', 'https://beckett.com/grading'), ('bgs-gaming', 'https://www.beckett.com/gaming-grading'),
+                ('sgc-home', 'https://www.gosgc.com/'), ('sgc-pricing', 'https://www.gosgc.com/card-grading/services-pricing'), ('sgc-pricing2', 'https://gosgc.com/card-grading/services-pricing')]:
+    s, b = get(u); save(name + '.html', b)
+    log.append(f'{name} {s} {len(b)} blocked={blocked(b)} dollars={len(re.findall(rb"\$\s?\d", b))}')
+# SGC app: current scripts from its home page, then every chunk they load
+s, b = get('https://www.gosgc.com/')
+scripts = re.findall(rb'(?:src|href)="((?:main|chunk|polyfills)-[A-Z0-9]+\.js)"', b)
+seen, todo = set(), [x.decode() for x in scripts]
+while todo and len(seen) < 80:
+    f = todo.pop(0)
+    if f in seen: continue
+    seen.add(f)
+    s, js = get('https://www.gosgc.com/' + f)
+    if not js or js.startswith(b'<!DOCTYPE'): continue
+    save('sgc-' + f, js)
+    todo += [x.decode() for x in re.findall(rb'(chunk-[A-Z0-9]+\.js)', js) if x.decode() not in seen]
+    if re.search(rb'(?i)services-pricing|declared value|expedited', js): log.append(f'sgc pricing words in {f} ({len(js)} bytes)')
+    for h in sorted(set(re.findall(rb'https?://[a-z0-9.-]+\.[a-z]{2,}(?:/[a-zA-Z0-9/_.-]{0,60})?', js))):
+        if re.search(rb'sgc|api', h): log.append(f'   {f}: {h.decode()}')
+log.append(f'sgc files read: {len(seen)}')
+open('out/log.txt', 'w').write('\n'.join(log)); print('\n'.join(log))
