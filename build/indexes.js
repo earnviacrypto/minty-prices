@@ -4,7 +4,8 @@
 // "Actually trades" = its market price changed on at least `bar` of the last 90 days (fewer while the history is young):
 // a price that sits still for months is a listing nobody buys, and would skew the index. The bar is 20 days for busy
 // games; a quieter game gets 10 or 5, whichever gives it the bigger index (the stricter bar when both give the same).
-const IX_VERSION = 2; // 2: the trading bar adapts to each game (quiet games get an index too); equal weight
+const IX_VERSION = 3; // 3: members (ids) listed, for the deal finder
+// 2: the trading bar adapts to each game (quiet games get an index too); equal weight
 const DAY_MS = 864e5;
 
 // Size of an index from how many products qualify today (small games get smaller indexes; too few = no index).
@@ -60,7 +61,7 @@ function buildIndex(prices, info, kind, days, startIso) {
   if (first < 0) return null;
   const row = id => { const p = prices.get(id), x = info.get(id), now = at(p, last), was = at(p, last - 30); return { id, g: x.g, name: x.name, set: x.set, price: now / 100, ch: was > 0 && last - 30 >= first ? Math.round((now - was) / was * 1000) / 10 : null }; };
   const rows = cons.map(row).filter(r => r.ch !== null && r.ch !== 0).sort((a, b) => b.ch - a.ch);
-  return { n, bar, first, values: vals.slice(first), up: rows.filter(r => r.ch > 0).slice(0, 5), down: rows.filter(r => r.ch < 0).reverse().slice(0, 5) };
+  return { n, bar, first, ids: cons.slice(), values: vals.slice(first), up: rows.filter(r => r.ch > 0).slice(0, 5), down: rows.filter(r => r.ch < 0).reverse().slice(0, 5) };
 }
 // Both indexes of one category from its history and its product file (prices-<cat>.json).
 function categoryIndexes(hist, productFile, startIso) {

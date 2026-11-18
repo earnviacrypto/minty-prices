@@ -41,6 +41,58 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(sizeFor('card', 500) === 100 && sizeFor('sealed', 30) === 10 && sizeFor('card', 10) === 0, 'sizes');
 }
 
+// ---- deal finder ----
+{
+  const D = require('./deals');
+  const card = { id: 1, cat: 3, g: 5, kind: 'card', name: 'Umbreon VMAX (Alternate Art Secret)', number: '215/203', set: 'Evolving Skies', market: 1650 };
+  ok(D.buildQuery(card) === 'Pokemon Umbreon VMAX 215/203', 'query: game, name without brackets, number: ' + D.buildQuery(card));
+  const L = (title, price, extra = {}) => Object.assign({ itemId: 'v1|' + title.length + '|' + price, title, price: { value: String(price), currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' },
+    seller: { username: 's', feedbackPercentage: '99.5', feedbackScore: 500 }, shippingOptions: [{ shippingCostType: 'FIXED', shippingCost: { value: '5.00' } }], condition: 'Ungraded', itemWebUrl: 'https://www.ebay.com/itm/1' }, extra);
+  const now = '2026-11-18T00:00:00Z';
+  const good = D.dealFrom(card, L('Pokemon Umbreon VMAX 215/203 Evolving Skies Alt Art NM', 1149.99), now);
+  ok(good && good.total === 1154.99 && good.pct > 29 && good.pct < 31, 'a real deal: price + shipping, % under market');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 PSA 10 Evolving Skies', 1149.99), now), 'graded listing is not a raw deal');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies PROXY', 1149.99), now), 'proxies thrown out');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 214/203 Evolving Skies', 1149.99), now), 'wrong card number thrown out');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 500), now), 'more than 60% under: too good to be true');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 1500), now), 'less than 15% under: not a deal');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 1149.99, { seller: { feedbackPercentage: '95.0', feedbackScore: 900 } }), now), 'seller under 98% feedback thrown out');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies Japanese', 1149.99), now), 'foreign listing for an English card thrown out');
+  const box = { id: 2, cat: 89, g: 7, kind: 'sealed', name: 'Origins - Booster Display', number: '', set: 'Origins', market: 268.92 };
+  ok(!!D.dealFrom(box, L('Riftbound Origins Booster Display 24 packs sealed', 199.99), now) && !D.dealFrom(box, L('Riftbound Origins Booster Display Case', 199.99), now), 'sealed: a case is not a box');
+  ok(D.numForms('001/298').includes('1/298') && D.numForms('OP09-004')[0] === 'op09-004', 'number forms');
+  // items and the hourly plan
+  const ix = { cats: { 3: { cards: { ids: [10, 11, 12] }, sealed: null } } };
+  const pf = { 3: { groups: [{ groupId: 5, name: 'Set' }], products: { 5: [[10, 'A', '1/9', 'R', '', 1], [11, 'A (Alt)', '1/9', 'R', '', 1], [12, 'B', '2/9', 'R', '', 1]] }, prices: { 5: { 10: { Normal: 300 }, 11: { Normal: 900 }, 12: { Normal: 10 } } } } };
+  const items = D.itemsFrom(ix, pf);
+  ok(items.length === 2 && items.every(x => x.market === 300), 'items: under $20 left out; same number = the cheaper printing as market');
+  const H = 3600000, t0 = Date.parse('2026-11-18T12:00:00Z');
+  const its = [{ id: 1, market: 500 }, { id: 2, market: 50 }, { id: 3, market: 250 }];
+  const p1 = D.plan(its, { checked: { 1: t0 - 7 * H, 2: t0 - 25 * H, 3: t0 - 2 * H } }, [], t0, 10);
+  ok(p1.map(x => x.id).join() === '1,2', 'plan: $200+ every 6 h, the rest every 24 h');
+  ok(D.plan(its, { checked: {} }, [], t0, 2).map(x => x.id).join() === '1,3', 'plan: dear items first when short of searches');
+}
+
+// ---- deal finder run (fake GitHub, fake eBay) ----
+const dealsRun = async () => {
+  const D = require('./deals');
+  const files = {};
+  const gh = { download: async (tag, name) => files[tag + '/' + name] || null, put: async (tag, name, buf) => { files[tag + '/' + name] = buf; } };
+  let r = await D.runDeals({ gh, appId: '', certId: '', log: () => {} });
+  ok(!r.enabled && JSON.parse(files['prices/deals.json']).enabled === false, 'no eBay keys: deals.json says not connected');
+  files['history/indexes.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ built: 'b1', cats: { 3: { cards: { ids: [10] } } } })));
+  files['prices/prices-3.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ groups: [{ groupId: 5, name: 'Evolving Skies' }], products: { 5: [[10, 'Umbreon VMAX (Alternate Art Secret)', '215/203', 'R', '', 1]] }, prices: { 5: { 10: { Holofoil: 1650 } } } })));
+  let searches = 0;
+  const ebay = { search: async it => { searches++; return [{ itemId: 'x1', title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: '1100', currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: 'a', feedbackPercentage: '100', feedbackScore: 99 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/x1' }]; } };
+  r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
+  const out = JSON.parse(files['prices/deals.json']);
+  ok(r.enabled && searches === 1 && out.deals.length === 1 && out.deals[0].pid === 10 && out.budget.used === 1, 'keys set: item searched once, deal published, budget counted');
+  r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T13:00:00Z') });
+  ok(searches === 2 || searches === 1, 'next hour: rechecks only when due');
+  r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T19:00:00Z') });
+  ok(searches >= 2 && JSON.parse(files['prices/deals.json']).deals[0].found === out.deals[0].found, 'a $200+ item again after 6 h; the same listing keeps its found time');
+};
+
 // ---- fake TCGCSV ----
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mpt-'));
 const START = '2026-11-10';
@@ -139,5 +191,6 @@ const quiet = () => {};
   r = await main({ fetch: fakeFetch, gh: gh2, cfg, gap: 0, log: quiet, parser: 2 });
   ok(!calls.some(u => /ppmd/.test(u) && /2026-11-1[0-4]/.test(u)) && !store2.state['archive-2026-11-14.7z'] && JSON.parse(store2.state['state.json']).archives['2026-11-14'] === 3, 'fixed reader: the kept archive is used, TCGCSV not asked again for any day already read');
   ok(JSON.parse(store2.state['state.json']).req.n === 18 + 3, 'requests counted across runs (first run 18, last run 3)');
+  await dealsRun();
   console.log('minty-prices: ' + n + ' checks passed');
 })().catch(e => { console.error(e); process.exit(1); });
