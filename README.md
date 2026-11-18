@@ -18,6 +18,7 @@ Prices: TCGplayer market prices via TCGCSV. Nothing here is estimated.
 
 | release | file | what |
 |---|---|---|
+| `prices` | `categories.json` | TCGplayer's list of games (categories) |
 | `prices` | `prices-<category>.json.gz` | a TCGplayer category (game): its sets, products and today's market prices |
 | `history` | `index.json` | which history file holds each set, and the dates covered |
 | `history` | `h-<category>-<n>.json.gz` | daily market price history of a bunch of sets |

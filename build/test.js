@@ -76,6 +76,7 @@ const quiet = () => {};
   const s = Hist.unpack(b0.start, b0.series['1001|Holofoil']);
   ok(s.length === 7 && s[0][0] === '2026-11-10' && s[0][1] === 0.5 && s.find(x => x[0] === '2026-11-16')[1] === 0.56 && s[6][0] === '2026-11-17' && s[6][1] === 1.1, 'history: archive days + the daily pull, missing day skipped');
   ok(!store.state['hist-4.bin.gz'], 'categories Minty does not use are not kept');
+  ok(JSON.parse(store.prices['categories.json']).results.length === 2, 'TCGplayer\'s list of games published');
   ok(JSON.parse(repoFiles['status.json']).archiveDaysLeft === 0, 'status file written');
 
   // Run 2: nothing new

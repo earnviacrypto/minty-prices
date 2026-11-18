@@ -104,6 +104,8 @@ async function main(env = {}) {
     const all = await tc.get(`${TC}/tcgplayer/categories`);
     for (const c of (all && all.results) || []) if (c.categoryId > cfg.lastKnownCategory && !cats.includes(c.categoryId)) { cats.push(c.categoryId); log('New TCGplayer category', c.categoryId, c.name); }
     for (const c of cfg.categories) if (!cats.includes(c)) cats.push(c);
+    // TCGplayer's list of games, so Minty can notice a game TCGplayer adds (without asking TCGCSV itself)
+    if (all && all.results) await gh.put('prices', 'categories.json', Buffer.from(JSON.stringify({ updated: upd, results: all.results.map(c => ({ categoryId: c.categoryId, name: c.name, displayName: c.displayName || c.name, modifiedOn: c.modifiedOn || '' })) })));
     state.cats = cats;
     const day = dayIndex(START, updDate);
     for (const cat of cats) {
