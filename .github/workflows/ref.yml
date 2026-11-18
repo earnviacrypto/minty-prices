@@ -2,19 +2,15 @@ name: ref
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/ref.yml', 'ref.txt', 'ref.py']
+    paths: ['.github/workflows/ref.yml']
 permissions:
   contents: write
 jobs:
-  ref:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Fetch reference slab photos
-        run: python3 ref.py
-      - name: Publish
+      - name: Remove the temporary reference pictures
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release view ref >/dev/null 2>&1 || gh release create ref --title ref --notes "temporary"
-          tar czf ref.tgz out && gh release upload ref ref.tgz --clobber
+          GH_REPO: ${{ github.repository }}
+        run: gh release delete ref --yes --cleanup-tag || true
