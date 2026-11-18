@@ -6,11 +6,30 @@ on:
 permissions:
   contents: write
 jobs:
-  cleanup:
+  pages:
     runs-on: ubuntu-latest
     steps:
-      - name: Remove the temporary reference pictures
+      - name: Read the grading companies' price pages
+        run: |
+          mkdir -p out
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+          while read -r name url; do
+            curl -sL -A "$UA" -m 40 -o "out/$name.direct.html" -w "$name direct %{http_code} %{size_download}\n" "$url" || echo "$name direct fail"
+            curl -sL -m 60 -H 'Accept: text/plain' -o "out/$name.jina.txt" -w "$name jina %{http_code} %{size_download}\n" "https://r.jina.ai/$url" || echo "$name jina fail"
+          done <<'LIST'
+          psa https://www.psacard.com/services/tradingcardgrading
+          psa-pricing https://www.psacard.com/pricing
+          cgc https://www.cgccards.com/submit/services-and-fees/
+          bgs https://www.beckett.com/grading
+          bgs-gaming https://www.beckett.com/gaming-grading
+          sgc https://gosgc.com/card-grading/services-pricing
+          tag https://taggrading.com/pages/pricing
+          LIST
+          ls -la out
+      - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: gh release delete ref --yes --cleanup-tag || true
+        run: |
+          gh release view ref >/dev/null 2>&1 || gh release create ref --title ref --notes "temporary"
+          tar czf pages.tgz out && gh release upload ref pages.tgz --clobber
