@@ -25,6 +25,8 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(psa && psa.length === 11 && psa[0].join('|') === 'Value|$39.99|$500|90–100 business days||open' && psa[10][1] === '$9,999+' && psa[10][2] === 'over $250,000', 'PSA page: every listed tier with price, cover and wait');
   ok(tag && tag.length === 6 && tag[0].join('|') === 'Value|$29.95|$250|90 business days|10 cards|open' && tag[5][2] === '$5,000', 'TAG page: tiers with card minimums and protection');
   ok(bgs && bgs.length === 5 && bgs.filter(t => t[5] === 'sold').length === 4 && bgs[3].join('|') === 'Express|$79.95||15 business days||open' && bgs[0][4] === 'No sub-grades', 'Beckett page: sold-out tiers marked, the two Base prices told apart');
+  const cgc = G.READ.CGC(fx('cgc'));
+  ok(cgc && cgc.length === 6 && cgc[0].join('|') === 'Bulk|$17|$500|150 working days|25 cards|open' && cgc[5].join('|') === 'Unlimited|$300 + 1% of value|any value|2 working days||open', 'CGC page: tiers with value cap, fee, wait and the bulk minimum');
   ok(G.READ.PSA('Just a moment...') === null && G.READ.BGS('<title>Just a moment...</title>') === null, 'a blocked page is not read as prices');
   const merged = G.mergeTiers(psa, require('./grading-seed.json').companies.PSA.tiers);
   ok(merged.length === 14 && merged[0][0] === 'Value Bulk' && merged[0][5] === 'paused' && merged[0][4] === '50 cards, Collectors Club' && merged[1][0] === 'Value', 'tiers no longer listed stay, marked paused, in their old place');
@@ -98,7 +100,7 @@ const gradingRun = async () => {
   const readFetch = async (u) => { const host = new URL(u.replace('https://r.jina.ai/', '')).host; const body = u.startsWith('https://r.jina.ai/') && pages[host] ? pages[host] : '<title>Just a moment...</title>'; if (/archive\.org\/wayback/.test(u)) return { ok: true, json: async () => ({ archived_snapshots: {} }) }; return { ok: true, text: async () => body }; };
   const r = await G.runGrading({ gh, readFetch, fetch: readFetch, now: Date.parse('2026-11-19T12:00:00Z'), log: () => {} });
   ok(r.companies.PSA.from === 'site' && r.companies.PSA.checked === '2026-11-19T12:00:00.000Z' && r.companies.PSA.tiers.length === 14, 'grading run: a readable page is used and dated today');
-  ok(r.companies.CGC.checked === '2026-09-29T12:00:00Z' && r.companies.CGC.tried === '2026-11-19T12:00:00.000Z' && r.companies.CGC.tiers.length === 6, 'grading run: a blocked company keeps its last tiers and their date');
+  ok(r.companies.CGC.checked === '2026-10-16T01:49:00Z' && r.companies.CGC.tried === '2026-11-19T12:00:00.000Z' && r.companies.CGC.tiers.length === 6, 'grading run: a blocked company keeps its last tiers and their date');
   const again = await G.runGrading({ gh, readFetch, fetch: readFetch, now: Date.parse('2026-11-19T15:00:00Z'), log: () => {} });
   ok(again.skipped && JSON.parse(store['grading.json']).updated === '2026-11-19T12:00:00.000Z', 'grading run: only once a day');
 };

@@ -9,7 +9,7 @@ const GRADING_VERSION = 1;
 const ORDER = ['PSA', 'CGC', 'BGS', 'SGC', 'TAG'];
 const PAGES = {
   PSA: 'https://www.psacard.com/services/tradingcardgrading',
-  CGC: 'https://www.cgccards.com/submit/services-and-fees/',
+  CGC: 'https://www.cgccards.com/submit/services-fees/cgc-grading/',
   BGS: 'https://www.beckett.com/grading',
   SGC: 'https://gosgc.com/card-grading/services-pricing',
   TAG: 'https://taggrading.com/pages/pricing',
@@ -54,9 +54,12 @@ const READ = {
   },
   CGC(text) {
     const t = flat(text), out = [];
-    const re = /(Bulk|Economy|Standard|Express|WalkThrough|Unlimited(?: Value)?)\s+\$([\d,.]+(?:\s*\+\s*1%\s*(?:of\s*)?FMV)?)\s+\$?([\d,]+|Unlimited)\s+(\d+)\s*(?:working )?days/gi;
+    const re = /(Bulk|Economy|Standard|Express|WalkThrough|Unlimited Value)\b(.{0,260}?)Max\. Value per Card \(USD\)\s*(\$[\d,]+|Unlimited)\s*Fee Per Card \(USD\)\s*\$([\d,.]+(?:\s*\+\s*1%\s*FMV)?)\s*Current Turnaround \(working days\)\s*(\d+)\s*days/gi;
     let m;
-    while ((m = re.exec(t))) out.push([m[1].replace(/ Value$/, ''), money(m[2]).replace(/\s*\+\s*1%.*$/, ' + 1% of value'), /unlimited/i.test(m[3]) ? 'any value' : '$' + m[3], m[4] + ' working days', /^bulk$/i.test(m[1]) ? '25 cards' : '', 'open']);
+    while ((m = re.exec(t))) {
+      const min = (m[2].match(/(\d+)-card minimum/i) || [])[1];
+      out.push([m[1].replace(/ Value$/, ''), money(m[4]).replace(/\s*\+\s*1%\s*FMV$/i, ' + 1% of value'), /unlimited/i.test(m[3]) ? 'any value' : m[3], m[5] + ' working days', min ? min + ' cards' : '', 'open']);
+    }
     return out.length >= 3 ? out : null;
   },
   SGC(text) {

@@ -17,7 +17,7 @@
       ["Premium 5", "$4,999", "$250,000", "5–7 business days", "", "open"],
       ["Premium 10", "$9,999+", "over $250,000", "5–7 business days", "", "open"]
     ]},
-    "CGC": { "checked": "2026-09-29T12:00:00Z", "from": "report", "tiers": [
+    "CGC": { "checked": "2026-10-16T01:49:00Z", "from": "archive", "tiers": [
       ["Bulk", "$17", "$500", "150 working days", "25 cards", "open"],
       ["Economy", "$20", "$1,000", "90 working days", "", "open"],
       ["Standard", "$55", "$3,000", "10 working days", "", "open"],
