@@ -16,7 +16,7 @@ const DEALS_VERSION = 1;
 const CFG = { dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
-const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage'];
+const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor'];
 const GRADED_WORDS = ['psa', 'bgs', 'cgc', 'tag', 'sgc', 'beckett', 'graded', 'gem mint', 'slab', 'slabbed'];
 const FOREIGN_WORDS = ['japanese', 'japan', 'jp', 'jpn', 'korean', 'chinese', 'german', 'french', 'italian', 'spanish', 'portuguese', 'thai', 'indonesian'];
 
@@ -49,11 +49,79 @@ function rejectReason(it, l) {
     if (forms.length && !forms.some(f => t.includes(' ' + f + ' ') || t.includes(' ' + f.replace(/\//g, ' / ') + ' ') || t.includes('#' + f))) return 'number';
   } else {
     if (/\bcase\b/i.test(it.name) !== /\bcase\b/.test(t)) return 'case';
-    if (GRADED_WORDS.some(w => t.includes(' ' + w + ' ')) || /\bgraded\b|\bgm\b/.test(t)) return 'graded'; // a slab promo listed under the box
+    if (GRADED_WORDS.some(w => t.includes(' ' + w + ' ')) || /\bgraded\b|\bgm\b|\bmt ?10\b|gem mt/.test(t)) return 'graded'; // a slab promo listed under the box
   }
   const need = words(it.kind === 'sealed' ? it.name : baseName(it.name));
   if (need.some(w => !t.includes(' ' + w + ' ') && !t.includes(' ' + w))) return 'name';
+  if (it.kind !== 'sealed' && !(UNIQUE_NO.has(+it.cat) && numForms(it.number).length)) { // "(SP)", "(Wanted Poster)", "(Gold)": the version in brackets has to be in the title too
+    const vw = variantWords(it.name);
+    if (vw.some(alts => !alts.some(a => t.includes(' ' + a + ' ')))) return 'version';
+    const mine = ' ' + vw.map(a => a[0]).join(' ') + ' ' + norm(it.set);
+    if (VARIANT_FLAGS.some(([f, k]) => t.includes(f) && !mine.includes(' ' + k)) ) return 'version'; // an alt art or anniversary printing listed for the plain card
+  }
+  if (it.kind !== 'sealed' && EVENT_FLAGS.some(f => t.includes(f) && !norm(it.name + ' ' + it.set).includes(f))) return 'version'; // stamped, pre-release, staff…
+  if (otherSet(it, t)) return 'other set';
+  if (it.kind !== 'sealed' && EVENT_SET.test(it.set || '')) { // a stamped event or promo printing: the event has to be named, not just the number
+    const sw = setWords(it.set);
+    if (sw.length && sw.some(w => !t.includes(' ' + w))) return 'set';
+  }
+  if (it.kind === 'sealed' && !/promo/i.test(it.name) && (/ promos? |promos?-\d/.test(t) || / stamped /.test(t) || /\b\d{1,3}\/[a-z]{0,4}\d{1,3}\b|#\d{2,3}\b/.test(t))) return 'single card'; // a promo card listed under the box it came in
+  if (it.kind !== 'sealed' && !numForms(it.number).length) { // no card number to check: the set has to be named instead
+    const sw = setWords(it.set);
+    if (!sw.length || sw.some(w => !t.includes(' ' + w))) return 'set';
+  }
+  if (it.kind === 'sealed') { // a booster box listing must not be a bundle, an ETB or a set of something else
+    const want = sealedTypes(norm(it.name)), got = sealedTypes(t);
+    if (want.size && ![...want].some(x => got.has(x))) return 'type';
+    if ([...got].some(x => !want.has(x))) return 'type';
+    const sw = setWords(it.set).filter(w => !need.includes(w));
+    if (sw.length && sw.some(w => !t.includes(' ' + w))) return 'set';
+  }
   return '';
+}
+// Games where a card number alone names the printing (Pokémon); elsewhere variants share the number.
+const UNIQUE_NO = new Set([3, 85]);
+const VARIANT_FLAGS = [[' alt art ', 'alternate'], [' alternate art ', 'alternate'], [' parallel ', 'parallel'], [' aa ', 'parallel'], [' sp ', 'sp'], [' manga ', 'manga'], [' anniversary ', 'anniversary'], [' wanted poster ', 'wanted'], [' treasure rare ', 'treasure'], [' premium card collection ', 'premium'], [' best selection ', 'best']];
+const EVENT_FLAGS = [' stamped ', ' prerelease ', ' pre-release ', ' staff ', ' championship ', ' judge '];
+const EVENT_SET = /promo|event|tournament|prize|pre-?release|championship|celebration|anniversary|premium card|judge|store|league/i;
+// Words in a card name's brackets, each with the ways sellers write it. Plain printing words are not required.
+const VARIANT_SKIP = new Set(['version', 'set', 'card', 'cards', 'the', 'and', 'non', 'foil', 'holofoil', 'normal', 'english', 'eng', 'pack', 'promo', 'edition', 'print', 'printing']);
+const VARIANT_ALT = { alternate: ['alternate', 'alt'], parallel: ['parallel', 'alt', 'aa'], secret: ['secret', 'sec', 'sir', 'scr'], 'full': ['full', 'fa'], 'japanese': ['japanese', 'jp', 'jpn', 'japan'], 'anniversary': ['anniversary', 'anniv'], 'treasure': ['treasure', 'tr'] };
+function variantWords(name) {
+  const out = [];
+  for (const m of String(name || '').matchAll(/\(([^)]*)\)/g)) for (const w of norm(m[1]).trim().split(' ')) {
+    if (!w || VARIANT_SKIP.has(w) || /^\d+$/.test(w) || (w.length < 2)) continue;
+    out.push(VARIANT_ALT[w] || [w]);
+  }
+  return out;
+}
+// Another set of the same game named in the title ("Perfect Order 3 Pack Booster Bundle" under Mega Evolution).
+let OTHER = {};
+function useSetNames(names) {
+  OTHER = {};
+  for (const [cat, list] of Object.entries(names || {})) OTHER[cat] = [...new Set(list.map(setPhrase).filter(Boolean))];
+}
+// A set name as sellers write it, for spotting it in a title: "ME02: Phantasmal Flames" → " phantasmal flames ". Too short or too generic: none.
+function setPhrase(n) {
+  const ph = norm(String(n || '').replace(/^[A-Z]{1,5}\d{0,3}[a-z]?:\s*/, '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' '));
+  const w = ph.trim().split(' ').filter(Boolean);
+  if (w.length < 2 || ph.trim().length < 8 || w.every(x => SET_SKIP.has(x) || x.length < 3 || /^\d+$/.test(x))) return '';
+  return ph;
+}
+function otherSet(it, t) {
+  const own = setPhrase(it.set) || norm(it.set), nm = norm(it.name);
+  return (OTHER[it.cat] || []).some(ph => t.includes(ph) && !own.includes(ph) && !ph.includes(own.trim() ? own : '\u0000') && !nm.includes(ph));
+}
+// The words that name a set, without the game and generic words ("ME01: Mega Evolution" → mega, evolution).
+const SET_SKIP = new Set(['pokemon', 'one', 'piece', 'yugioh', 'magic', 'gathering', 'promotion', 'promotional', 'promo', 'promos', 'cards', 'card', 'set', 'series', 'collection', 'boxes', 'box', 'collectors', 'collector', 'products', 'product', 'sealed', 'japanese', 'english', 'edition', 'booster', 'vol', 'the', 'best', 'premium', 'special', 'misc', 'miscellaneous']);
+const setWords = s => words(String(s || '').replace(/^[A-Z]{1,5}\d{0,3}[a-z]?:\s*/, '')).filter(w => !SET_SKIP.has(w) && !/^\d+$/.test(w));
+// Kinds of sealed product a title names. "Booster Bundle Box" is a bundle, not a box.
+const SEALED_TYPES = [['set', / (collector|gift|collectors) set /], ['etb', / elite trainer | etb /], ['bundle', / bundle /], ['collection', / (premium|special|ultra premium|super premium|poster|pin|figure|binder|ex|vmax|vstar|gx|box) collection /], ['collector', / collector s? (box|set|chest) /], ['display', / display /], ['case', / case /], ['tin', / tins? /], ['blister', / blister /], ['deck', / deck /], ['pack', / packs? (?!box)/], ['box', / booster box /]];
+function sealedTypes(t) {
+  const out = new Set(); let s = t;
+  for (const [k, re] of SEALED_TYPES) if (re.test(s)) { out.add(k); if (k === 'bundle' || k === 'etb') s = s.replace(/ booster box /g, ' '); }
+  if (out.has('box') || out.has('etb') || out.has('bundle') || out.has('display') || out.has('collection') || out.has('collector')) out.delete('pack'); // "36 packs" inside a box
+  return out;
 }
 function dealFrom(it, l, now) {
   if (!l || !l.price || l.price.currency !== 'USD') return null;
@@ -138,7 +206,8 @@ function listPick(priceFiles, total = CFG.listTop) {
       const mk = id => { const v = Object.values(pr[id] || {}).filter(x => x > 0); return v.length ? Math.min(...v) : null; };
       const rows = list.map(p => ({ id: p[0], cat: +cat, g: g.groupId, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: g.name, market: mk(p[0]) })).filter(x => x.market);
       const cards = rows.filter(x => x.kind === 'card' && x.market >= CFG.listLo && x.market <= CFG.listHi).sort((a, b) => b.market - a.market).slice(0, CFG.perSetCards);
-      const sealed = rows.filter(x => x.kind === 'sealed' && x.market >= CFG.minMarket && x.market <= 400 && !/\bcase\b/i.test(x.name)) // boxes, ETBs, bundles – not cases.sort((a, b) => b.market - a.market).slice(0, CFG.perSetSealed);
+      // boxes, ETBs, bundles – not cases
+      const sealed = rows.filter(x => x.kind === 'sealed' && x.market >= CFG.minMarket && x.market <= 400 && !/\bcase\b/i.test(x.name)).sort((a, b) => b.market - a.market).slice(0, CFG.perSetSealed);
       return cards.concat(sealed);
     });
     let taken = 0;
@@ -187,6 +256,15 @@ class Ebay {
   }
 }
 
+// Biggest saving first; an eBay listing shows once (under the item it matches best), and one seller's identical listings once.
+function cleanDeals(deals) {
+  const seen = new Set(), same = new Set();
+  return deals.slice().sort((a, b) => b.pct - a.pct).filter(d => {
+    const k = d.pid + '|' + norm(d.title) + '|' + d.total;
+    if (seen.has(d.lid) || same.has(k)) return false;
+    seen.add(d.lid); same.add(k); return true;
+  });
+}
 async function runDeals(env = {}) {
   const log = env.log || ((...a) => console.log(new Date().toISOString().slice(11, 19), 'deals:', ...a));
   const fetchFn = env.fetch || fetch;
@@ -211,7 +289,8 @@ async function runDeals(env = {}) {
     for (const cat of Object.keys(indexes.cats || {})) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
     const deal = itemsFrom(indexes, priceFiles), pick = listPick(priceFiles), have = new Set(deal.map(x => x.id));
     st.listIds = pick.map(x => x.id);
-    st.items = deal.concat(pick.filter(x => !have.has(x.id))); st.itemsBuilt = indexes.built + '/list2';
+    st.items = deal.concat(pick.filter(x => !have.has(x.id))); st.itemsBuilt = indexes.built + '/list3';
+    st.setNames = {}; for (const [cat, pf] of Object.entries(priceFiles)) st.setNames[cat] = (pf.groups || []).map(g => g.name); // to spot a listing for another set
     log(`${st.items.length} items to watch`);
   }
   const P = pacific(now);
@@ -221,10 +300,11 @@ async function runDeals(env = {}) {
   const lsBuf = await gh.download('prices', 'listings.json.gz');
   let LS = null; try { LS = lsBuf ? JSON.parse(zlib.gunzipSync(lsBuf)) : null; } catch (_) {}
   LS = LS && LS.items ? LS : { v: 1, items: {} };
+  useSetNames(st.setNames);
   const byId = new Map(st.items.map(it => [it.id, it]));
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
-  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked));
+  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals kept from before pass today's checks too
   const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
@@ -234,15 +314,22 @@ async function runDeals(env = {}) {
     searched++; st.budget.used++; st.checked[it.id] = now;
     const old = new Map(deals.filter(d => d.pid === it.id).map(d => [d.lid, d]));
     deals = deals.filter(d => d.pid !== it.id);
-    for (const l of list) { const d = dealFrom(it, l, new Date(now).toISOString()); if (d) { if (old.has(d.lid)) d.found = old.get(d.lid).found; else if (firstSeen.has(d.lid)) d.found = firstSeen.get(d.lid); deals.push(d); } }
+    const sellers = new Set(), titles = new Set(); // one deal per seller per item: a seller's 40 copies of one card fill one card, not 40
+    for (const l of list) {
+      const d = dealFrom(it, l, new Date(now).toISOString()); if (!d) continue;
+      const who = (l.seller || {}).username || '', same = norm(l.title) + '|' + d.total;
+      if ((who && sellers.has(who)) || titles.has(same)) continue;
+      if (who) sellers.add(who); titles.add(same); // used only here – no seller name is kept
+      if (old.has(d.lid)) d.found = old.get(d.lid).found; else if (firstSeen.has(d.lid)) d.found = firstSeen.get(d.lid);
+      deals.push(d);
+    }
     const ls = []; for (const l of list) { const x = listingFrom(it, l); if (x) ls.push(x); if (ls.length >= CFG.keepListings) break; }
     LS.items[it.id] = { at: new Date(now).toISOString(), g: it.g, cat: it.cat, k: it.kind, n: it.name, num: it.number || '', m: it.market, l: ls };
     if (!env.fast) await sleep(250);
   }
   deals = deals.filter(d => fresh(d.checked));
   for (const [id, v] of Object.entries(LS.items)) if (!byId.has(+id) && !byId.has(id) || !fresh(v.at)) delete LS.items[id]; // older than 6 h or no longer watched: deleted
-  deals.sort((a, b) => b.pct - a.pct);
-  deals = deals.slice(0, CFG.keep);
+  deals = cleanDeals(deals).slice(0, CFG.keep);
   await gh.put('prices', 'deals.json', Buffer.from(JSON.stringify({ v: DEALS_VERSION, enabled: true, updated: new Date(now).toISOString(), items: st.items.length, budget: st.budget, lastError: searched ? null : lastError, deals })));
   await gh.put('prices', 'listings.json.gz', zlib.gzipSync(Buffer.from(JSON.stringify({ v: 1, updated: new Date(now).toISOString(), count: Object.keys(LS.items).length, items: LS.items }))));
   await gh.put('state', 'deals-state.json', Buffer.from(JSON.stringify(st)));
@@ -250,5 +337,5 @@ async function runDeals(env = {}) {
   return { enabled: true, searched, deals: deals.length };
 }
 
-module.exports = { listPick, runDeals, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
+module.exports = { listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
 if (require.main === module) runDeals().catch(e => { console.error(e); process.exit(1); });
