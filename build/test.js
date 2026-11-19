@@ -89,7 +89,14 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   const H = 3600000, t0 = Date.parse('2026-11-18T12:00:00Z');
   const its = [{ id: 1, market: 500 }, { id: 2, market: 50 }, { id: 3, market: 250 }];
   const p1 = D.plan(its, { checked: { 1: t0 - 7 * H, 2: t0 - 25 * H, 3: t0 - 2 * H } }, [], t0, 10);
-  ok(p1.map(x => x.id).join() === '1,2', 'plan: $200+ every 6 h, the rest every 24 h');
+  ok(p1.map(x => x.id).sort().join() === '1,2', 'plan: the dearest items again after 5 h (their listings stay under 6 h old)');
+  const many = Array.from({ length: D.CFG.listTop + 1 }, (_, i) => ({ id: i + 1, market: 10000 - i }));
+  const chk = Object.fromEntries(many.map(x => [x.id, t0 - 6 * H]));
+  ok(D.plan(many, { checked: chk }, [], t0, 5000).length === D.CFG.listTop, 'plan: past the dearest ' + D.CFG.listTop + ', once a day');
+  const lst = D.listingFrom(card, L('Pokemon Umbreon VMAX 215/203 Evolving Skies Alt Art NM', 1700, { itemAffiliateWebUrl: 'https://www.ebay.com/itm/1?campid=5339254309' }));
+  ok(lst && lst.p === 1700 && lst.s === 5 && /campid=5339254309/.test(lst.u) && !('seller' in lst) && !JSON.stringify(lst).includes('"s":"s"'), 'listing: any fair price, affiliate link, no seller name');
+  ok(!D.listingFrom(card, L('Umbreon VMAX 215/203 Evolving Skies PSA 10', 1700)) && !D.listingFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 300)), 'listing: no slabs, nothing far under market');
+  ok(!('seller' in good), 'deal: no seller name kept');
   ok(D.plan(its, { checked: {} }, [], t0, 2).map(x => x.id).join() === '1,3', 'plan: dear items first when short of searches');
 }
 
@@ -187,7 +194,11 @@ const dealsRun = async () => {
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T13:00:00Z') });
   ok(searches === 2 || searches === 1, 'next hour: rechecks only when due');
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T19:00:00Z') });
-  ok(searches >= 2 && JSON.parse(files['prices/deals.json']).deals[0].found === out.deals[0].found, 'a $200+ item again after 6 h; the same listing keeps its found time');
+  ok(searches >= 2 && JSON.parse(files['prices/deals.json']).deals[0].found === out.deals[0].found, 'a top item again after 5 h; the same listing keeps its found time');
+  const LS = JSON.parse(zlib.gunzipSync(files['prices/listings.json.gz']));
+  ok(LS.items[10] && LS.items[10].l.length === 1 && LS.items[10].at === '2026-11-18T19:00:00.000Z', 'listings file: the item\'s listings with their time');
+  r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay: { search: async () => { throw new Error('eBay search: 500'); } }, fast: true, log: () => {}, now: Date.parse('2026-11-19T02:00:00Z') });
+  ok(!JSON.parse(zlib.gunzipSync(files['prices/listings.json.gz'])).items[10] && !JSON.parse(files['prices/deals.json']).deals.length, 'nothing older than 6 h is kept (eBay rule)');
 };
 
 // ---- fake TCGCSV ----
