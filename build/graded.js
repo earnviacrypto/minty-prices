@@ -6,8 +6,11 @@
 // Budget: PokeInvest allows 300 calls a day without a key; 270 are used (PI_DAILY overrides; PI_KEY, if ever set as a
 // repository secret, is sent as a Bearer token). The work is done once a day (UTC), at the first hourly run.
 // Which cards: every English Pokémon card (TCGplayer category 3) worth $20+, dearest first, up to 4,000.
-//  - a card not read yet: search (1) + population (1, also gives the TCGplayer number that proves the match) + prices (1)
-//  - a card read before: population + prices (2), the dearest 500 every 7 days, the rest every 21 days
+//  - a card not read yet: search (1) + population (1, also gives the TCGplayer number that proves the match) + prices (1) + sales (1)
+//  - a card read before: population + prices + sales (3), the dearest 500 every 7 days, the rest every 21 days
+// Sales ("Recent sales" on a card page) are read in the same visit as the prices, and only the sales behind each
+// price are kept (same grade, same window: 90 days, or a year when a grade sold rarely) – so the list and the
+// prices above it always agree. eBay withholds its sale links; other platforms' links are kept.
 //  - no match on PokeInvest: tried again after 30 days
 const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
@@ -16,6 +19,7 @@ const CFG = { daily: 270, minMarket: 20, pool: 4000, top: 500, freshTop: 7, fres
 const DAY = 86400000;
 const PI_URL = 'https://www.pokeinvest.io/mcp';
 const VERSION = 1;
+const SALES_PER_GRADE = 25; // newest kept per grade (the price's own sale count is shown either way)
 
 // ---- matching a TCGplayer card to its PokeInvest card (same rules as Minty's lib/sources2.js) ----
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&amp;/g, '&').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -50,6 +54,26 @@ function gradedFromPi(p, pop) {
       : ps.psa_total ? { psa: ps.psa_10 ? { 10: ps.psa_10 } : {}, total: ps.psa_total, gem: ps.psa_10 && ps.psa_total ? Math.round(ps.psa_10 / ps.psa_total * 10000) / 100 : null, updated: ps.psa_last_updated || null, cgcTotal: ps.cgc_total || null } : null };
 }
 
+// get_sales → the sales behind each price: [date, price, grader ('RAW' when ungraded), grade, platform, url|0]
+function salesFrom(res, d) {
+  if (!res || !Array.isArray(res.sales) || !d) return null;
+  const now = Date.now(), win = new Map();
+  if (d.raw) win.set('RAW|', d.raw.days || 90);
+  for (const g of d.grades || []) win.set(g.grader + '|' + g.grade, g.days || 90);
+  const per = {}, out = [];
+  const rows = res.sales.map(x => {
+    const graded = x.grader && !/^(raw|ungraded|none|null)$/i.test(String(x.grader));
+    return { date: String(x.date || '').slice(0, 10), price: num(x.price_usd), gr: graded ? String(x.grader).toUpperCase() : 'RAW', g: graded ? String(x.grade == null ? '' : x.grade).replace(/\.0$/, '') : '', pf: String(x.platform || '').slice(0, 20), url: /^https:\/\//.test(x.url || '') ? String(x.url).slice(0, 300) : 0 };
+  }).filter(x => x.price > 0 && /^\d{4}-\d\d-\d\d$/.test(x.date)).sort((a, b) => b.date.localeCompare(a.date));
+  for (const x of rows) {
+    const k = x.gr + '|' + x.g, days = win.get(k);
+    if (!days) continue; // a grade with no price above: left out, so the two blocks never disagree
+    if (now - Date.parse(x.date + 'T12:00:00Z') > (days + 1) * DAY) continue;
+    if ((per[k] = (per[k] || 0) + 1) > SALES_PER_GRADE) continue;
+    out.push([x.date, x.price, x.gr, x.g, x.pf, x.url]);
+  }
+  return out;
+}
 // The cards to keep: English Pokémon cards worth $20+, dearest first (highest TCGplayer market price of any printing).
 function cardsFrom(pf) {
   const setName = new Map((pf.groups || []).map(g => [String(g.groupId), g.name]));
@@ -115,7 +139,11 @@ async function readCard(pi, c, known, gap) {
     const p = await pi.call('get_card_prices', { card: id }); await sleep(gap);
     if (p && p.tcgplayer_id && String(p.tcgplayer_id) !== c.id) continue;
     const d = gradedFromPi(p, pop && pop.population ? pop : null);
-    return d ? { pi: id, d } : { miss: true };
+    if (!d) return { miss: true };
+    let s = null, limit = false;
+    try { s = salesFrom(await pi.call('get_sales', { card: id, days: 365 }), d); await sleep(gap); }
+    catch (e) { if (e.limit) limit = true; } // prices without the list is fine; the list never comes without its prices
+    return { pi: id, d, s, limit };
   }
   return { miss: true };
 }
@@ -142,7 +170,7 @@ async function runGraded(env = {}) {
   let read = 0, missed = 0, lastError = null, n = 0;
   for (const c of todo) {
     n++;
-    if (st.used + (st.cards[c.id] && st.cards[c.id].pi ? 2 : 3) > daily) break;
+    if (st.used + (st.cards[c.id] && st.cards[c.id].pi ? 3 : 4) > daily) break;
     const before = pi.used;
     let r;
     try { r = await readCard(pi, c, st.cards[c.id] && st.cards[c.id].pi, gap); }
@@ -150,8 +178,9 @@ async function runGraded(env = {}) {
     st.used += pi.used - before;
     if (r.miss) { st.cards[c.id] = { miss: 1, at: now }; delete out.cards[c.id]; missed++; continue; }
     st.cards[c.id] = { pi: r.pi, at: now };
-    out.cards[c.id] = { at: new Date(now).toISOString().slice(0, 10), pi: r.pi, d: r.d };
+    out.cards[c.id] = Object.assign({ at: new Date(now).toISOString().slice(0, 10), pi: r.pi, d: r.d }, r.s && r.s.length ? { s: r.s } : {});
     read++;
+    if (r.limit) { lastError = 'PokeInvest daily limit reached'; break; }
   }
   if (n >= todo.length && !lastError) st.idle = true; // nothing left to do today
   // cards that fell out of the list (price dropped under $20) are kept until 60 days old
@@ -163,5 +192,5 @@ async function runGraded(env = {}) {
   return { read, missed, used: st.used, count: out.count };
 }
 
-module.exports = { runGraded, cardsFrom, plan, piCandidates, piName, piSet, gradedFromPi, readCard, PokeInvest, CFG };
+module.exports = { runGraded, cardsFrom, plan, piCandidates, piName, piSet, gradedFromPi, salesFrom, readCard, PokeInvest, CFG };
 if (require.main === module) runGraded().catch(e => { console.error(e); process.exit(1); });
