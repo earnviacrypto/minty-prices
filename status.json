@@ -1,7 +1,7 @@
 {
-  "pricesUpdated": "2026-11-18T20:05:56.000Z",
+  "pricesUpdated": "2026-11-19T20:04:34.000Z",
   "historyFrom": "2024-02-08",
-  "historyTo": "2026-11-18",
+  "historyTo": "2026-11-19",
   "archiveDaysLeft": 0,
   "categories": [
     1,
@@ -38,5 +38,5 @@
     91,
     92
   ],
-  "built": "2026-11-19T01:18:43.531Z"
+  "built": "2026-11-19T21:06:54.597Z"
 }
