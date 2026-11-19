@@ -40,6 +40,12 @@ jobs:
           EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
           EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: Graded prices
+        if: always()
+        run: node build/graded.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PI_KEY: ${{ secrets.PI_KEY }}
       - name: Grading companies
         if: always()
         run: node build/grading.js

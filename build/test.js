@@ -136,6 +136,41 @@ const reportsRun = async () => {
   const r3 = await G.runGrading({ gh, readFetch: mk(), fetch: mk(), now: Date.parse('2026-11-20T12:00:00Z'), log: () => {} });
   ok(r3.companies.SGC.checked === '2026-11-12T12:00:00Z' && r3.companies.SGC.tried === '2026-11-20T12:00:00.000Z', 'reports: no newer report keeps the last good data and its date');
 };
+// Graded prices: matched by the TCGplayer number, read once a day within the allowance, refreshed later
+const gradedRun = async () => {
+  const G = require('./graded');
+  const files = {};
+  const gh = { download: async (tag, name) => files[tag + '/' + name] || null, put: async (tag, name, buf) => { files[tag + '/' + name] = buf; } };
+  files['prices/prices-3.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ groups: [{ groupId: 5, name: 'SWSH07: Evolving Skies' }, { groupId: 6, name: 'XY - Ancient Origins' }],
+    products: { 5: [[10, 'Umbreon VMAX (Alternate Art Secret)', '215/203', 'R', '', 1], [11, 'Cheap card', '1/203', 'C', '', 1], [12, 'Booster Box', '', '', '', 0]], 6: [[20, 'Lugia EX (94 Full Art)', '94/98', 'R', '', 1]] },
+    prices: { 5: { 10: { Holofoil: 1650 }, 11: { Normal: 0.5 }, 12: { Normal: 300 } }, 6: { 20: { Holofoil: 150 } } } })));
+  const calls = [];
+  const answers = {
+    search_cards: a => ({ cards: /umbreon/i.test(a.query) ? [{ id: 'pi_12081', name: 'Umbreon VMAX #215', set: 'Evolving Skies' }, { id: 'pi_x', name: 'Umbreon VMAX #95', set: 'Evolving Skies' }] : /lugia/i.test(a.query) ? [{ id: 'pi_2912', name: 'Lugia EX #94', set: 'Ancient Origins' }] : [] }),
+    get_population: a => a.card === 'pi_12081' ? { tcgplayer_id: '10', population: { psa_10: 22079, psa_9: 6704, total: 32082 }, gem_rate_pct: 68.82, psa_last_updated: '2026-11-16' } : { tcgplayer_id: '999', population: { total: 5 } },
+    get_card_prices: a => ({ tcgplayer_id: '10', name: 'Umbreon VMAX #215', page_url: 'u', ungraded: { median_usd: 1800, sales: 219 }, graded: [{ grader: 'PSA', grade: '10', median_usd: 3850, sales: 239 }, { grader: 'CGC', grade: '10', median_usd: 0, sales: 0 }], population: { cgc_total: 3146 } })
+  };
+  const pi = { used: 0, call: async (tool, args) => { pi.used++; calls.push(tool + ' ' + (args.card || args.query)); return answers[tool](args); } };
+  const day1 = Date.parse('2026-11-19T12:00:00Z');
+  let r = await G.runGraded({ gh, pi, gap: 0, now: day1, log: () => {} });
+  let out = JSON.parse(zlib.gunzipSync(files['prices/graded.json.gz']));
+  ok(out.cards['10'] && out.cards['10'].pi === 'pi_12081' && out.cards['10'].d.grades.length === 1 && out.cards['10'].d.pop.psa['10'] === 22079 && out.cards['10'].d.pop.cgcTotal === 3146, 'graded: Umbreon read, priced grades only, PSA population and CGC total kept');
+  ok(!out.cards['20'] && r.missed === 1 && calls.includes('get_population pi_2912'), 'graded: a card whose TCGplayer number does not match is not published');
+  ok(!calls.some(c => /Cheap|Booster/.test(c)) && out.pool === 2, 'graded: only cards worth $20+, no sealed');
+  calls.length = 0;
+  r = await G.runGraded({ gh, pi, gap: 0, now: day1 + 3600000, log: () => {} });
+  ok(r.skipped && !calls.length, 'graded: nothing more to do the same day – later hourly runs skip');
+  r = await G.runGraded({ gh, pi, gap: 0, now: day1 + 8 * 86400000, log: () => {} });
+  ok(calls.length === 2 && calls[0] === 'get_population pi_12081', 'graded: a known card is refreshed after 7 days with 2 calls, no search');
+  calls.length = 0;
+  files['state/graded-state.json'] = null;
+  r = await G.runGraded({ gh, pi, gap: 0, now: day1 + 9 * 86400000, daily: 4, log: () => {} });
+  ok(calls.length <= 4 && r.used <= 4, 'graded: the daily allowance is never passed');
+  const lim = { used: 0, call: async () => { lim.used++; const e = new Error('PokeInvest daily limit reached'); e.limit = true; throw e; } };
+  files['state/graded-state.json'] = null;
+  r = await G.runGraded({ gh, pi: lim, gap: 0, now: day1 + 10 * 86400000, log: () => {} });
+  ok(lim.used === 1 && JSON.parse(zlib.gunzipSync(files['prices/graded.json.gz'])).cards['10'], 'graded: at PokeInvest\'s limit it stops at once and keeps what it had');
+};
 const dealsRun = async () => {
   const D = require('./deals');
   const files = {};
@@ -254,6 +289,7 @@ const quiet = () => {};
   ok(!calls.some(u => /ppmd/.test(u) && /2026-11-1[0-4]/.test(u)) && !store2.state['archive-2026-11-14.7z'] && JSON.parse(store2.state['state.json']).archives['2026-11-14'] === 3, 'fixed reader: the kept archive is used, TCGCSV not asked again for any day already read');
   ok(JSON.parse(store2.state['state.json']).req.n === 18 + 3, 'requests counted across runs (first run 18, last run 3)');
   await dealsRun();
+  await gradedRun();
   await gradingRun();
   await reportsRun();
   console.log('minty-prices: ' + n + ' checks passed');
