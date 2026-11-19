@@ -33,3 +33,6 @@ products: { groupId: [[productId, name, number, rarity, imageUrl, isCard]] }, pr
 
 `h-<category>-<n>.json.gz`: `{ cat, start, series: { "productId|subType": [firstDay, firstPriceCents, change, change, …] } }` —
 days are counted from `start`; each later entry is the change in cents from the last price, or `null` for a day with no price.
+
+## Before every push
+Run `cp tools/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push` once per clone: every push then runs `node build/test.js` first and is stopped if a check fails (a failing check makes the hourly job skip Read prices).
