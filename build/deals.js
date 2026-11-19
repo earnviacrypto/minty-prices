@@ -16,7 +16,7 @@ const DEALS_VERSION = 1;
 const CFG = { dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
-const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only'];
+const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage'];
 const GRADED_WORDS = ['psa', 'bgs', 'cgc', 'tag', 'sgc', 'beckett', 'graded', 'gem mint', 'slab', 'slabbed'];
 const FOREIGN_WORDS = ['japanese', 'japan', 'jp', 'jpn', 'korean', 'chinese', 'german', 'french', 'italian', 'spanish', 'portuguese', 'thai', 'indonesian'];
 
@@ -49,6 +49,7 @@ function rejectReason(it, l) {
     if (forms.length && !forms.some(f => t.includes(' ' + f + ' ') || t.includes(' ' + f.replace(/\//g, ' / ') + ' ') || t.includes('#' + f))) return 'number';
   } else {
     if (/\bcase\b/i.test(it.name) !== /\bcase\b/.test(t)) return 'case';
+    if (GRADED_WORDS.some(w => t.includes(' ' + w + ' ')) || /\bgraded\b|\bgm\b/.test(t)) return 'graded'; // a slab promo listed under the box
   }
   const need = words(it.kind === 'sealed' ? it.name : baseName(it.name));
   if (need.some(w => !t.includes(' ' + w + ' ') && !t.includes(' ' + w))) return 'name';
