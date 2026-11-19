@@ -169,10 +169,10 @@ async function runDeals(env = {}) {
   deals = deals.filter(d => byId.has(d.pid) && now - Date.parse(d.checked) < 30 * 3600000); // an item not rechecked in 30 h: its deals drop
   const todo = plan(st.items, st, deals, now, allowance);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
-  let searched = 0;
+  let searched = 0, lastError = null;
   for (const it of todo) {
     let list;
-    try { list = await eb.search(it); } catch (e) { log(it.name, e.message); if (e.limit) break; continue; }
+    try { list = await eb.search(it); } catch (e) { log(it.name, e.message); lastError = e.message.slice(0, 300); if (e.limit || /sign-in/.test(e.message)) break; continue; } // a failed sign-in fails every search: stop
     searched++; st.budget.used++; st.checked[it.id] = now;
     const old = new Map(deals.filter(d => d.pid === it.id).map(d => [d.lid, d]));
     deals = deals.filter(d => d.pid !== it.id);
@@ -181,7 +181,7 @@ async function runDeals(env = {}) {
   }
   deals.sort((a, b) => b.pct - a.pct);
   deals = deals.slice(0, CFG.keep);
-  await gh.put('prices', 'deals.json', Buffer.from(JSON.stringify({ v: DEALS_VERSION, enabled: true, updated: new Date(now).toISOString(), items: st.items.length, budget: st.budget, deals })));
+  await gh.put('prices', 'deals.json', Buffer.from(JSON.stringify({ v: DEALS_VERSION, enabled: true, updated: new Date(now).toISOString(), items: st.items.length, budget: st.budget, lastError: searched ? null : lastError, deals })));
   await gh.put('state', 'deals-state.json', Buffer.from(JSON.stringify(st)));
   log(`searched ${searched} of ${todo.length} planned (${st.budget.used} today), ${deals.length} deals`);
   return { enabled: true, searched, deals: deals.length };
