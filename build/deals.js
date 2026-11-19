@@ -1,6 +1,6 @@
 // Deal finder: eBay Buy It Now listings well under the TCGplayer market price, for the cards and sealed products in the
 // market indexes. Runs after the price job every hour, and only when the eBay keys are set as repository secrets
-// (EBAY_APP_ID, EBAY_CERT_ID; EBAY_CAMPAIGN_ID optional for affiliate links). Everyone's Minty reads the one file it
+// (EBAY_APP_ID, EBAY_CERT_ID; the EPN campaign defaults to 5339254309). Everyone's Minty reads the one file it
 // writes (prices/deals.json) – no copy of Minty ever searches eBay itself, so users never use up eBay searches.
 //
 // Budget: eBay allows 5,000 searches a day per app (reset at midnight Pacific). 4,500 are used, spread over the hours:
@@ -140,7 +140,7 @@ async function runDeals(env = {}) {
   const log = env.log || ((...a) => console.log(new Date().toISOString().slice(11, 19), 'deals:', ...a));
   const fetchFn = env.fetch || fetch;
   const gh = env.gh || new GitHub({ repo: env.repo || process.env.GITHUB_REPOSITORY, token: env.token || process.env.GITHUB_TOKEN, fetch: fetchFn, log });
-  const appId = env.appId ?? process.env.EBAY_APP_ID, certId = env.certId ?? process.env.EBAY_CERT_ID, campaign = env.campaign ?? process.env.EBAY_CAMPAIGN_ID ?? '';
+  const appId = env.appId ?? process.env.EBAY_APP_ID, certId = env.certId ?? process.env.EBAY_CERT_ID, campaign = env.campaign ?? (process.env.EBAY_CAMPAIGN_ID || '5339254309'); // Pavel's EPN campaign (not a secret: it is in every affiliate link)
   const now = env.now || Date.now();
   const prevBuf = await gh.download('prices', 'deals.json');
   let prev = null; try { prev = prevBuf ? JSON.parse(prevBuf) : null; } catch (_) {}
