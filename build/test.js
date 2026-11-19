@@ -160,6 +160,7 @@ const gradedRun = async () => {
   const answers = {
     search_cards: a => ({ cards: /umbreon/i.test(a.query) ? [{ id: 'pi_12081', name: 'Umbreon VMAX #215', set: 'Evolving Skies' }, { id: 'pi_x', name: 'Umbreon VMAX #95', set: 'Evolving Skies' }] : /lugia/i.test(a.query) ? [{ id: 'pi_2912', name: 'Lugia EX #94', set: 'Ancient Origins' }] : [] }),
     get_population: a => a.card === 'pi_12081' ? { tcgplayer_id: '10', population: { psa_10: 22079, psa_9: 6704, total: 32082 }, gem_rate_pct: 68.82, psa_last_updated: '2026-11-16' } : { tcgplayer_id: '999', population: { total: 5 } },
+    get_sales: a => ({ sales: [{ date: '2026-11-15', price_usd: 3900, grader: 'PSA', grade: '10', platform: 'eBay' }, { date: '2026-11-10', price_usd: 1750, grader: null, grade: null, platform: 'TCGplayer', url: 'https://example.com/s' }, { date: '2026-11-12', price_usd: 900, grader: 'CGC', grade: '9', platform: 'eBay' }] }),
     get_card_prices: a => ({ tcgplayer_id: '10', name: 'Umbreon VMAX #215', page_url: 'u', ungraded: { median_usd: 1800, sales: 219 }, graded: [{ grader: 'PSA', grade: '10', median_usd: 3850, sales: 239 }, { grader: 'CGC', grade: '10', median_usd: 0, sales: 0 }], population: { cgc_total: 3146 } })
   };
   const pi = { used: 0, call: async (tool, args) => { pi.used++; calls.push(tool + ' ' + (args.card || args.query)); return answers[tool](args); } };
@@ -169,11 +170,13 @@ const gradedRun = async () => {
   ok(out.cards['10'] && out.cards['10'].pi === 'pi_12081' && out.cards['10'].d.grades.length === 1 && out.cards['10'].d.pop.psa['10'] === 22079 && out.cards['10'].d.pop.cgcTotal === 3146, 'graded: Umbreon read, priced grades only, PSA population and CGC total kept');
   ok(!out.cards['20'] && r.missed === 1 && calls.includes('get_population pi_2912'), 'graded: a card whose TCGplayer number does not match is not published');
   ok(!calls.some(c => /Cheap|Booster/.test(c)) && out.pool === 2, 'graded: only cards worth $20+, no sealed');
+  const sl = out.cards['10'].s || [];
+  ok(sl.some(x => x[2] === 'PSA' && x[3] === '10' && x[1] === 3900) && !sl.some(x => x[2] === 'CGC'), 'graded: sales kept for priced grades only (PSA 10 yes, unpriced CGC 9 no)');
   calls.length = 0;
   r = await G.runGraded({ gh, pi, gap: 0, now: day1 + 3600000, log: () => {} });
   ok(r.skipped && !calls.length, 'graded: nothing more to do the same day – later hourly runs skip');
   r = await G.runGraded({ gh, pi, gap: 0, now: day1 + 8 * 86400000, log: () => {} });
-  ok(calls.length === 2 && calls[0] === 'get_population pi_12081', 'graded: a known card is refreshed after 7 days with 2 calls, no search');
+  ok(calls.length === 3 && calls[0] === 'get_population pi_12081' && calls.includes('get_sales pi_12081') && !calls.some(c => /^search_cards/.test(c)), 'graded: a known card is refreshed after 7 days with 3 calls (population, prices, sales), no search');
   calls.length = 0;
   files['state/graded-state.json'] = null;
   r = await G.runGraded({ gh, pi, gap: 0, now: day1 + 9 * 86400000, daily: 4, log: () => {} });
