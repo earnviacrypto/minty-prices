@@ -97,6 +97,11 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(lst && lst.p === 1700 && lst.s === 5 && /campid=5339254309/.test(lst.u) && !('seller' in lst) && !JSON.stringify(lst).includes('"s":"s"'), 'listing: any fair price, affiliate link, no seller name');
   ok(!D.listingFrom(card, L('Umbreon VMAX 215/203 Evolving Skies PSA 10', 1700)) && !D.listingFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 300)), 'listing: no slabs, nothing far under market');
   ok(!('seller' in good), 'deal: no seller name kept');
+  const pfs = { 3: { groups: [{ groupId: 1, name: 'Old Set', publishedOn: '2000-01-01' }, { groupId: 2, name: 'New Set', publishedOn: '2026-11-01' }],
+    products: { 1: [[100, 'Old Card', '1/9', 'R', '', 1]], 2: [[200, 'Cheap', '1/9', 'C', '', 1], [201, 'Mid', '2/9', 'R', '', 1], [202, 'Dear', '3/9', 'R', '', 1], [203, 'Booster Box', '', '', '', 0]] },
+    prices: { 1: { 100: { Holofoil: 40 } }, 2: { 200: { Normal: 1 }, 201: { Holofoil: 30 }, 202: { Holofoil: 900 }, 203: { Normal: 140 } } } } };
+  const pk = D.listPick(pfs, 100).map(x => x.id);
+  ok(pk.join() === '201,203,100', 'listings pick: $5–$250 cards and sealed, newest set first, a handful from each set, newest first: ' + pk.join());
   ok(D.plan(its, { checked: {} }, [], t0, 2).map(x => x.id).join() === '1,3', 'plan: dear items first when short of searches');
 }
 
@@ -185,9 +190,9 @@ const dealsRun = async () => {
   let r = await D.runDeals({ gh, appId: '', certId: '', log: () => {} });
   ok(!r.enabled && JSON.parse(files['prices/deals.json']).enabled === false, 'no eBay keys: deals.json says not connected');
   files['history/indexes.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ built: 'b1', cats: { 3: { cards: { ids: [10] } } } })));
-  files['prices/prices-3.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ groups: [{ groupId: 5, name: 'Evolving Skies' }], products: { 5: [[10, 'Umbreon VMAX (Alternate Art Secret)', '215/203', 'R', '', 1]] }, prices: { 5: { 10: { Holofoil: 1650 } } } })));
+  files['prices/prices-3.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ groups: [{ groupId: 5, name: 'Evolving Skies' }], products: { 5: [[10, 'Umbreon VMAX (Alternate Art Secret)', '215/203', 'R', '', 1]] }, prices: { 5: { 10: { Holofoil: 200 } } } })));
   let searches = 0;
-  const ebay = { search: async it => { searches++; return [{ itemId: 'x1', title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: '1100', currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: 'a', feedbackPercentage: '100', feedbackScore: 99 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/x1' }]; } };
+  const ebay = { search: async it => { searches++; return [{ itemId: 'x1', title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: '150', currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: 'a', feedbackPercentage: '100', feedbackScore: 99 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/x1' }]; } };
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
   const out = JSON.parse(files['prices/deals.json']);
   ok(r.enabled && searches === 1 && out.deals.length === 1 && out.deals[0].pid === 10 && out.budget.used === 1, 'keys set: item searched once, deal published, budget counted');

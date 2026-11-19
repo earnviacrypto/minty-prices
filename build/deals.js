@@ -13,7 +13,7 @@ const { GitHub, sleep } = require('./gh');
 const DEALS_VERSION = 1;
 // listTop: the dearest items, searched every listEvery hours so their listings can be shown (eBay: listing information
 // shown may be at most 6 hours older than on eBay – `stale`); the rest once a day, for deals only.
-const CFG = { dayBudget: 4500, minMarket: 20, listTop: 700, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
+const CFG = { dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
 const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only'];
@@ -116,11 +116,40 @@ function pacific(now) {
   const v = k => parts.find(p => p.type === k).value;
   return { day: `${v('year')}-${v('month')}-${v('day')}`, hoursLeft: 24 - (parseInt(v('hour'), 10) % 24) };
 }
+// The items whose listings are shown on card pages (listTop of them): what most people own and buy, not the dearest –
+// cards from $5 to $250 and sealed products from $20, newest sets first, a handful from each set, and slots shared out by
+// how big each game is. Card pages without their own listings show these as "More from <set>".
+const LIST_SKIP = /code card|jumbo|oversized|promo|pop series|trainer kit|miscellaneous|blister|world collection|burger king|mcdonald|professor program|first partner|prize pack|league|deck|art series|tins?$|collection$/i;
+const LIST_SHARE = { 3: 0.38, 68: 0.14, 1: 0.10, 71: 0.07, 2: 0.07, 89: 0.07, 85: 0.05 };
+function listPick(priceFiles, total = CFG.listTop) {
+  const cats = Object.keys(priceFiles);
+  const known = cats.filter(c => LIST_SHARE[c]), rest = cats.filter(c => !LIST_SHARE[c]);
+  const restShare = Math.max(0, 1 - known.reduce((a, c) => a + LIST_SHARE[c], 0));
+  const out = [];
+  for (const cat of cats) {
+    const pf = priceFiles[cat], slots = Math.round(total * (LIST_SHARE[cat] || (rest.length ? restShare / rest.length : 0)));
+    if (!slots) continue;
+    // a real release date is a plain day ("2026-11-06T00:00:00"); older sets carry the date TCGplayer last touched them
+    const rel = g => /T00:00:00(\.0+)?$/.test(String(g.publishedOn || '')) ? String(g.publishedOn) : '';
+    const groups = (pf.groups || []).filter(g => !LIST_SKIP.test(g.name)).sort((a, b) => rel(b).localeCompare(rel(a)) || b.groupId - a.groupId);
+    const queues = groups.map(g => {
+      const pr = (pf.prices || {})[g.groupId] || {}, list = (pf.products || {})[g.groupId] || [];
+      const mk = id => { const v = Object.values(pr[id] || {}).filter(x => x > 0); return v.length ? Math.min(...v) : null; };
+      const rows = list.map(p => ({ id: p[0], cat: +cat, g: g.groupId, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: g.name, market: mk(p[0]) })).filter(x => x.market);
+      const cards = rows.filter(x => x.kind === 'card' && x.market >= CFG.listLo && x.market <= CFG.listHi).sort((a, b) => b.market - a.market).slice(0, CFG.perSetCards);
+      const sealed = rows.filter(x => x.kind === 'sealed' && x.market >= CFG.minMarket && x.market <= 400 && !/\bcase\b/i.test(x.name)) // boxes, ETBs, bundles – not cases.sort((a, b) => b.market - a.market).slice(0, CFG.perSetSealed);
+      return cards.concat(sealed);
+    });
+    let taken = 0;
+    for (const q of queues) { for (const x of q) { if (taken >= slots) break; out.push(x); taken++; } if (taken >= slots) break; } // newest set first, a handful from each
+  }
+  return out;
+}
 // Which items to search this hour: the dearest listTop every listEvery hours (their listings are shown), the rest once
 // a day; overdue top items first, then the longest unchecked, dearest first. Then rechecks of items with deals.
-function plan(items, st, deals, now, allowance) {
+function plan(items, st, deals, now, allowance, listIds) {
   const H = 3600000, last = id => (st.checked && st.checked[id]) || 0;
-  const top = new Set(items.slice().sort((a, b) => b.market - a.market).slice(0, CFG.listTop).map(it => it.id));
+  const top = listIds || new Set(items.slice().sort((a, b) => b.market - a.market).slice(0, CFG.listTop).map(it => it.id));
   const due = items.filter(it => now - last(it.id) >= (top.has(it.id) ? CFG.listEvery : CFG.lowEvery) * H)
     .sort((a, b) => top.has(b.id) - top.has(a.id) || last(a.id) - last(b.id) || b.market - a.market);
   const picked = due.slice(0, allowance);
@@ -176,10 +205,12 @@ async function runDeals(env = {}) {
   const ixBuf = await gh.download('history', 'indexes.json.gz');
   const indexes = ixBuf ? JSON.parse(zlib.gunzipSync(ixBuf)) : null;
   if (!indexes) { log('no market indexes yet'); return { enabled: true, searched: 0 }; }
-  if (!st.items || st.itemsBuilt !== indexes.built) {
+  if (!st.items || st.itemsBuilt !== indexes.built + '/list2') {
     const priceFiles = {};
     for (const cat of Object.keys(indexes.cats || {})) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
-    st.items = itemsFrom(indexes, priceFiles); st.itemsBuilt = indexes.built;
+    const deal = itemsFrom(indexes, priceFiles), pick = listPick(priceFiles), have = new Set(deal.map(x => x.id));
+    st.listIds = pick.map(x => x.id);
+    st.items = deal.concat(pick.filter(x => !have.has(x.id))); st.itemsBuilt = indexes.built + '/list2';
     log(`${st.items.length} items to watch`);
   }
   const P = pacific(now);
@@ -193,7 +224,7 @@ async function runDeals(env = {}) {
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
   deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked));
-  const todo = plan(st.items, st, deals, now, allowance);
+  const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
   for (const it of todo) {
@@ -204,7 +235,7 @@ async function runDeals(env = {}) {
     deals = deals.filter(d => d.pid !== it.id);
     for (const l of list) { const d = dealFrom(it, l, new Date(now).toISOString()); if (d) { if (old.has(d.lid)) d.found = old.get(d.lid).found; else if (firstSeen.has(d.lid)) d.found = firstSeen.get(d.lid); deals.push(d); } }
     const ls = []; for (const l of list) { const x = listingFrom(it, l); if (x) ls.push(x); if (ls.length >= CFG.keepListings) break; }
-    LS.items[it.id] = { at: new Date(now).toISOString(), l: ls };
+    LS.items[it.id] = { at: new Date(now).toISOString(), g: it.g, cat: it.cat, k: it.kind, n: it.name, num: it.number || '', m: it.market, l: ls };
     if (!env.fast) await sleep(250);
   }
   deals = deals.filter(d => fresh(d.checked));
@@ -218,5 +249,5 @@ async function runDeals(env = {}) {
   return { enabled: true, searched, deals: deals.length };
 }
 
-module.exports = { runDeals, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
+module.exports = { listPick, runDeals, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
 if (require.main === module) runDeals().catch(e => { console.error(e); process.exit(1); });
