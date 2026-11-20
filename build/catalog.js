@@ -22,7 +22,10 @@ function unlock(buf, pass) {
   if (!buf || buf.length < 32 || buf.slice(0, 8).toString() !== 'Salted__') throw new Error('refresh token file not readable');
   const kv = crypto.pbkdf2Sync(pass, buf.slice(8, 16), 200000, 48, 'sha256');
   const d = crypto.createDecipheriv('aes-256-cbc', kv.slice(0, 32), kv.slice(32));
-  return Buffer.concat([d.update(buf.slice(16)), d.final()]).toString().trim();
+  const out = Buffer.concat([d.update(buf.slice(16)), d.final()]);
+  // a wrong key sometimes still ends in valid padding (about 1 in 256) and gives garbage, so the result must be plain text
+  if (!out.length || out.some(b => b < 9 || b > 126)) throw new Error('refresh token file not readable');
+  return out.toString().trim();
 }
 function lock(text, pass) { // the same format, for the tests
   const salt = crypto.randomBytes(8), kv = crypto.pbkdf2Sync(pass, salt, 200000, 48, 'sha256');
