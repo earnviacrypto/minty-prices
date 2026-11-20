@@ -2,7 +2,7 @@
 name: Catalog check
 on:
   push:
-    paths: ['tools/catalog-check.js', '.github/workflows/catalog-check.yml']
+    paths: ['tools/catalog-check.js', '.github/workflows/catalog-check.yml', 'auth/refresh.enc']
   workflow_dispatch:
 permissions:
   contents: write
@@ -13,11 +13,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
+      - name: Unlock the refresh token
+        env:
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+        run: |
+          RT=$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:EBAY_CERT_ID -in auth/refresh.enc)
+          echo "::add-mask::$RT"; echo "EBAY_RT_FILE=$RT" >> "$GITHUB_ENV"
       - run: node tools/catalog-check.js
         env:
           EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
-          EBAY_REFRESH_TOKEN: ${{ secrets.EBAY_REFRESH_TOKEN }}
+          EBAY_REFRESH_TOKEN: ${{ env.EBAY_RT_FILE }}
       - run: |
           git config user.name 'minty-bot'; git config user.email 'minty-bot@users.noreply.github.com'
           git add checks/catalog.json && git commit -m 'Catalog check result' && git pull --rebase -q && git push || true
