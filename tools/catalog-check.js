@@ -16,6 +16,10 @@ const Q = [
     body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: (RT || '').trim(), scope: SCOPES }),
   });
   const t = await r.json();
+  // Diagnose a refused token without showing it: its length, its type marker, and whether it works as a 2-hour user token.
+  const raw = (RT || '').trim();
+  out.secret = { length: raw.length, start: raw.slice(0, 6), refreshMarker: /#r\^1#/.test(raw), hasSpaces: /\s/.test(RT || '') };
+  if (!r.ok) { const s = await fetch('https://api.ebay.com/commerce/catalog/v1_beta/product_summary/search?limit=1&q=charizard', { headers: { Authorization: 'Bearer ' + raw, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }); out.asUserToken = s.status; }
   out.token = r.ok ? 'ok, access token valid ' + t.expires_in + ' s' : { status: r.status, error: t.error, description: t.error_description };
   if (r.ok) for (const [game, q] of Q) {
     const u = 'https://api.ebay.com/commerce/catalog/v1_beta/product_summary/search?limit=3&q=' + encodeURIComponent(q);
