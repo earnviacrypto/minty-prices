@@ -13,7 +13,7 @@ const { GitHub, sleep } = require('./gh');
 const DEALS_VERSION = 1;
 // listTop: the dearest items, searched every listEvery hours so their listings can be shown (eBay: listing information
 // shown may be at most 6 hours older than on eBay – `stale`); the rest once a day, for deals only.
-const CFG = { dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
+const CFG = { minPeers: 3, dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
 const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor'];
@@ -338,7 +338,7 @@ async function runDeals(env = {}) {
   const byId = new Map(st.items.map(it => [it.id, it]));
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
-  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals kept from before pass today's checks too
+  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
   const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
@@ -348,9 +348,16 @@ async function runDeals(env = {}) {
     searched++; st.budget.used++; st.checked[it.id] = now;
     const old = new Map(deals.filter(d => d.pid === it.id).map(d => [d.lid, d]));
     deals = deals.filter(d => d.pid !== it.id);
+    // What this item really sells for on eBay right now: the same checks as a deal (US seller, Buy It Now, the right item),
+    // any price. A deal has to be cheap against these too, not only against the market price – so a wrong or stale market
+    // price (a newer edition, a box whose price fell) never makes every listing look like a bargain.
+    const peers = list.map(l => listingFrom(it, l)).filter(Boolean).map(x => x.p + x.s).sort((a, b) => a - b);
+    const peerMid = peers.length >= CFG.minPeers ? peers[Math.floor(peers.length / 2)] : null;
     const sellers = new Set(), titles = new Set(); // one deal per seller per item: a seller's 40 copies of one card fill one card, not 40
     for (const l of list) {
       const d = dealFrom(it, l, new Date(now).toISOString()); if (!d) continue;
+      if (peerMid === null || d.total > peerMid * (1 - CFG.minOff)) continue; // not cheap next to the other listings of it
+      d.peers = peers.length; d.peerMid = peerMid;
       const who = (l.seller || {}).username || '', same = norm(l.title) + '|' + d.total;
       if ((who && sellers.has(who)) || titles.has(same)) continue;
       if (who) sellers.add(who); titles.add(same); // used only here – no seller name is kept

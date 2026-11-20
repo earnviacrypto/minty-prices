@@ -225,7 +225,12 @@ const dealsRun = async () => {
   files['history/indexes.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ built: 'b1', cats: { 3: { cards: { ids: [10] } } } })));
   files['prices/prices-3.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ groups: [{ groupId: 5, name: 'Evolving Skies' }], products: { 5: [[10, 'Umbreon VMAX (Alternate Art Secret)', '215/203', 'R', '', 1]] }, prices: { 5: { 10: { Holofoil: 200 } } } })));
   let searches = 0;
-  const ebay = { search: async it => { searches++; return [{ itemId: 'x1', title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: '150', currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: 'a', feedbackPercentage: '100', feedbackScore: 99 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/x1' }]; } };
+  const lst = (id, price, who) => ({ itemId: id, title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: String(price), currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: who, feedbackPercentage: '100', feedbackScore: 99 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/' + id });
+  // other sellers ask $195–$205: the $150 one stands out. When every listing asks about $150, none is a deal.
+  ok(await (async () => { const f2 = {}; const g2 = { download: async (t, n) => f2[t + '/' + n] || files[t + '/' + n] || null, put: async (t, n, b) => { f2[t + '/' + n] = b; } };
+    await D.runDeals({ gh: g2, appId: 'a', certId: 'b', ebay: { search: async () => [lst('y1', 150, 'a'), lst('y2', 152, 'b'), lst('y3', 149, 'c'), lst('y4', 155, 'd')] }, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
+    return JSON.parse(f2['prices/deals.json']).deals.length === 0; })(), 'deals: when all of eBay asks about the same, the market price is wrong – no deal');
+  const ebay = { search: async it => { searches++; return [lst('x1', 150, 'a'), lst('x2', 195, 'b'), lst('x3', 200, 'c'), lst('x4', 205, 'd')]; } };
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
   const out = JSON.parse(files['prices/deals.json']);
   ok(r.enabled && searches === 1 && out.deals.length === 1 && out.deals[0].pid === 10 && out.budget.used === 1, 'keys set: item searched once, deal published, budget counted');
@@ -234,7 +239,7 @@ const dealsRun = async () => {
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T19:00:00Z') });
   ok(searches >= 2 && JSON.parse(files['prices/deals.json']).deals[0].found === out.deals[0].found, 'a top item again after 5 h; the same listing keeps its found time');
   const LS = JSON.parse(zlib.gunzipSync(files['prices/listings.json.gz']));
-  ok(LS.items[10] && LS.items[10].l.length === 1 && LS.items[10].at === '2026-11-18T19:00:00.000Z', 'listings file: the item\'s listings with their time');
+  ok(LS.items[10] && LS.items[10].l.length === 4 && LS.items[10].at === '2026-11-18T19:00:00.000Z', 'listings file: the item\'s listings with their time');
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay: { search: async () => { throw new Error('eBay search: 500'); } }, fast: true, log: () => {}, now: Date.parse('2026-11-19T02:00:00Z') });
   ok(!JSON.parse(zlib.gunzipSync(files['prices/listings.json.gz'])).items[10] && !JSON.parse(files['prices/deals.json']).deals.length, 'nothing older than 6 h is kept (eBay rule)');
 };
