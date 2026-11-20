@@ -95,6 +95,15 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(D.plan(many, { checked: chk }, [], t0, 5000).length === D.CFG.listTop, 'plan: past the dearest ' + D.CFG.listTop + ', once a day');
   // matching: no false deals
   const rj = (it, title) => D.rejectReason(Object.assign({ cat: 3, kind: 'card', number: '' }, it), { title });
+  { const ray = { name: 'Rayquaza EX (Shiny)', set: 'XY Promos', number: 'XY69' };
+    ok(rj(ray, 'Rayquaza EX (Shiny) XY69 Holo Promo XY Promo Pokemon Moderately Played') === 'played', 'a played copy is not compared with the Near Mint price');
+    ok(rj(ray, 'Rayquaza EX (Shiny) - XY69 - Promo - XY Holo - Pokemon TCG - MP') === 'played' && rj(ray, 'Rayquaza EX XY69 Shiny Promo HP/MP+') === 'played', 'LP / MP / HP condition codes, also with a slash');
+    ok(rj({ name: 'Venusaur EX - XY123', set: 'XY Promos', number: 'XY123' }, 'Pokémon Venusaur EX Full Art Holo Promo XY123 XY 180 HP Jungle Hammer') === '', 'HP after a number is the hit points, not Heavily Played');
+    ok(rj({ name: 'Umbreon & Darkrai GX - SM241', set: 'SM Promos', number: 'SM241' }, 'Umbreon & Darkrai GX SM241 JUMBO OVERSIZED Pokémon Promo Near Mint') === 'jumbo', 'a jumbo card is not the normal card');
+    ok(rj({ name: 'Magikarp - 203/193', set: 'SV02: Paldea Evolved', number: '203/193' }, 'Magikarp 30th Celebrations Illustration Rare 203/193') === 'other set', 'a Celebration reprint is not the original');
+    ok(rj({ kind: 'sealed', name: 'Two Legends - Booster Box', set: 'Two Legends', cat: 68 }, 'S-Chinese OPC-08 Booster Box One Piece TCG Two Legends') === 'language', 'S-Chinese is Chinese');
+    ok(rj({ name: 'Gengar ex - 154/128', set: 'ME: 30th Celebration', number: '154/128' }, 'Gengar Ex 154/128 - 30th Celebrations | Pokémon Extended Artwork Display Case') === 'bad word', 'a display case is not the card');
+    ok(rj({ kind: 'sealed', name: 'One Piece Tin Pack Set Vol. 2 Display', set: 'Tin Pack Set Vol. 2', cat: 68 }, 'One Piece Mini-tin Pack Set vol.3 [TS-03] Display box-12 Mini Tins NEW/SEALED') === 'edition', 'another volume is another product'); }
   ok(rj({ name: 'Jolteon', set: 'Pokemon Jungle', cat: 85 }, 'Pokémon Japanese Jolteon 299/SM-P Gym Promo NEAR MINT') === 'set', 'a card with no number needs its set named');
   ok(rj({ name: 'Jolteon', set: 'Pokemon Jungle', cat: 85 }, 'Jolteon Pokemon Jungle Japanese Holo') === '', 'a card with no number and its set named is fine');
   ok(rj({ kind: 'sealed', name: 'Mega Evolution Booster Box', set: 'ME01: Mega Evolution' }, 'Pokemon Mega Evolution Booster Bundle Box Factory Sealed') === 'type', 'a booster bundle is not a booster box');

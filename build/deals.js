@@ -13,12 +13,12 @@ const { GitHub, sleep } = require('./gh');
 const DEALS_VERSION = 1;
 // listTop: the dearest items, searched every listEvery hours so their listings can be shown (eBay: listing information
 // shown may be at most 6 hours older than on eBay – `stale`); the rest once a day, for deals only.
-const CFG = { minPeers: 3, dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.60, minFeedback: 98, minRatings: 50, keep: 300 };
+const CFG = { minPeers: 3, trust: 0.8, dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.45, minFeedback: 98, minRatings: 50, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
-const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor'];
-const GRADED_WORDS = ['psa', 'bgs', 'cgc', 'tag', 'sgc', 'beckett', 'graded', 'gem mint', 'slab', 'slabbed'];
-const FOREIGN_WORDS = ['japanese', 'japan', 'jp', 'jpn', 'korean', 'chinese', 'german', 'french', 'italian', 'spanish', 'portuguese', 'thai', 'indonesian'];
+const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor', 'display case', 'case for', 'extended art case', 'extended artwork', 'artwork case', 'magnetic', 'frame', 'unsealed'];
+const GRADED_WORDS = ['psa', 'bgs', 'cgc', 'tag', 'sgc', 'beckett', 'graded', 'gem mint', 'slab', 'slabbed', 'pcg'];
+const FOREIGN_WORDS = ['japanese', 'japan', 'jp', 'jpn', 'jap', 'korean', 'chinese', 'german', 'french', 'italian', 'spanish', 'portuguese', 'thai', 'indonesian'];
 
 const norm = s => ' ' + String(s || '').toLowerCase().replace(/[^a-z0-9/\- ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
 // "Umbreon VMAX (Alternate Art Secret)" → "Umbreon VMAX"; "Nidoking ex - 216/182" → "Nidoking ex"
@@ -41,9 +41,13 @@ function rejectReason(it, l) {
   const t = norm(l.title);
   if (BAD_WORDS.some(w => t.includes(' ' + w + ' '))) return 'bad word';
   const foreignItem = it.cat === 85 || /japanese/i.test(it.set || '');
-  if (!foreignItem && FOREIGN_WORDS.some(w => t.includes(' ' + w + ' '))) return 'language';
+  if (!foreignItem && FOREIGN_WORDS.some(w => t.includes(' ' + w + ' ') || t.includes('-' + w + ' ') || t.includes(' ' + w + '-'))) return 'language'; // also "S-Chinese", "Chinese-Simplified"
   if (!foreignItem && +it.cat === 3 && (JP_SET.test(t) || t.includes(' pokemon card 151 '))) return 'language'; // a Japanese set code ("SV2a", "S12a", "SM11b") on an English card
   if (it.kind !== 'sealed') {
+    const tp = t.replace(/\//g, ' ');
+    if (PLAYED.test(tp) || / [a-z]*played /.test(tp) || [...tp.matchAll(/ (\S+) hp /g)].some(m => !/^\d+$/.test(m[1]))) return 'played'; // the market price is for Near Mint ("HP" after a number is the card's hit points)
+    if (JUMBO.test(t) && !JUMBO.test(norm(it.name + ' ' + it.set))) return 'jumbo';
+    if (+it.cat === 3 && REPRINT.test(t) && !REPRINT.test(norm(it.name + ' ' + it.set))) return 'other set'; // a 30th Celebration / Classic Collection reprint listed under the original
     if (GRADED_WORDS.some(w => t.includes(' ' + w + ' '))) return 'graded';
     if (l.conditionId === '2750' || /^graded/i.test(l.condition || '')) return 'graded';
     const forms = numForms(it.number);
@@ -75,6 +79,10 @@ function rejectReason(it, l) {
   const mineAll = norm(it.name + ' ' + it.set);
   // "30th Anniversary" on a 2021 Celebrations box: the game's Nth anniversary falls in another year than the set's
   if (it.yr && LAUNCH[it.cat]) for (const m of t.matchAll(/ (\d{1,2})(st|nd|rd|th) anniversary /g)) if (Math.abs(LAUNCH[it.cat] + +m[1] - it.yr) > 1 && !mineAll.includes(' ' + m[1] + m[2] + ' ')) return 'edition';
+  // "30th Celebrations" on a 2021 Celebrations box: an ordinal of 10+ that is not the product's own and falls in another year
+  if (it.yr && LAUNCH[it.cat]) for (const m of t.matchAll(/ (\d{2})(st|nd|rd|th) /g)) if (Math.abs(LAUNCH[it.cat] + +m[1] - it.yr) > 1 && !mineAll.includes(' ' + m[1] + m[2] + ' ')) return 'edition';
+  // another volume ("Vol. 3" listed under "Vol. 2")
+  { const v = x => (x.match(/ vol(?:ume)? ?(\d+) /) || [])[1], a = v(t), b = v(mineAll); if (a && b && a !== b) return 'edition'; }
   // sealed only: card sellers often write the wrong year
   if (it.yr && it.kind === 'sealed') for (const m of t.matchAll(/ (20[1-3]\d) /g)) if (+m[1] > it.yr + 1 && !mineAll.includes(' ' + m[1] + ' ')) return 'edition';
   if (it.kind === 'sealed') {
@@ -99,6 +107,10 @@ const VARIANT_FLAGS = [[' alt art ', 'alternate'], [' alternate art ', 'alternat
 // The year each game began, for its anniversary products (Pokémon's 25th = 2021, 30th = 2026).
 const LAUNCH = { 1: 1993, 2: 1999, 3: 1996, 85: 1996 };
 const SEALED_ODD = [' pokemon center ', ' costco ', ' sam s club ', ' walmart ', ' target exclusive ', ' gamestop ', ' half ', ' 18 packs ', ' missing ', ' incomplete ', ' no foil ', ' pre-order ', ' preorder ', ' pre order ', ' ocg ', ' prerelease ', ' pre-release ', ' build battle ', ' international '];
+// A played copy (the market price is for Near Mint) or a jumbo/oversized card listed under the normal one.
+const PLAYED = / (lp|mp|dm|played|light play|lightly play|moderate play|medium play|heavy play|crease|creased|creases|bent|whitening) /;
+const REPRINT = / (celebration|celebrations|classic collection) /;
+const JUMBO = / (jumbo|oversized?|big card|large card) /;
 const EVENT_FLAGS = [' stamped ', ' prerelease ', ' pre-release ', ' staff ', ' championship ', ' judge ', ' prize pack ', ' play pokemon '];
 // Japanese Pokémon set codes: a letter after the number (SV2a, SV5k, S12a, SM11b, M2a). English codes have none (SV08, ME01).
 const JP_SET = / (sv\d{1,2}[a-z]|s\d{1,2}[a-z]|sm\d{1,2}[a-z]|m\d[a-z]) /;
@@ -161,7 +173,7 @@ function dealFrom(it, l, now) {
 }
 // One listing for an item's "Check out these listings" box: the same checks as a deal (US seller with good feedback, Buy It Now,
 // shipping known, the right item, not graded/foreign/proxy) but any price from 40% of market up. No seller name is kept.
-function listingFrom(it, l) {
+function listingFrom(it, l, anyPrice) {
   if (!l || !l.price || l.price.currency !== 'USD') return null;
   if (!(l.buyingOptions || []).includes('FIXED_PRICE')) return null;
   if (l.itemLocation && l.itemLocation.country && l.itemLocation.country !== 'US') return null;
@@ -171,7 +183,7 @@ function listingFrom(it, l) {
   let ship = 0;
   if (so) { if (so.shippingCostType === 'CALCULATED' && !so.shippingCost) return null; ship = so.shippingCost ? parseFloat(so.shippingCost.value) || 0 : 0; }
   const price = parseFloat(l.price.value);
-  if (!(price + ship >= it.market * (1 - CFG.maxOff))) return null;
+  if (!anyPrice && !(price + ship >= it.market * (1 - CFG.maxOff))) return null;
   if (rejectReason(it, l)) return null;
   return { id: l.itemId, t: l.title, p: price, s: Math.round(ship * 100) / 100, c: l.condition || '', img: (l.image && l.image.imageUrl) || ((l.thumbnailImages || [])[0] || {}).imageUrl || '', u: l.itemAffiliateWebUrl || l.itemWebUrl };
 }
@@ -338,7 +350,7 @@ async function runDeals(env = {}) {
   const byId = new Map(st.items.map(it => [it.id, it]));
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
-  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
+  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
   const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
@@ -351,12 +363,13 @@ async function runDeals(env = {}) {
     // What this item really sells for on eBay right now: the same checks as a deal (US seller, Buy It Now, the right item),
     // any price. A deal has to be cheap against these too, not only against the market price – so a wrong or stale market
     // price (a newer edition, a box whose price fell) never makes every listing look like a bargain.
-    const peers = list.map(l => listingFrom(it, l)).filter(Boolean).map(x => x.p + x.s).sort((a, b) => a - b);
+    const peers = list.map(l => listingFrom(it, l, true)).filter(Boolean).map(x => x.p + x.s).sort((a, b) => a - b);
     const peerMid = peers.length >= CFG.minPeers ? peers[Math.floor(peers.length / 2)] : null;
+    const trusted = peerMid !== null && peerMid >= it.market * CFG.trust; // eBay's own listings have to back the market price up
     const sellers = new Set(), titles = new Set(); // one deal per seller per item: a seller's 40 copies of one card fill one card, not 40
     for (const l of list) {
       const d = dealFrom(it, l, new Date(now).toISOString()); if (!d) continue;
-      if (peerMid === null || d.total > peerMid * (1 - CFG.minOff)) continue; // not cheap next to the other listings of it
+      if (!trusted || d.total > peerMid * (1 - CFG.minOff)) continue; // not cheap next to the other listings of it
       d.peers = peers.length; d.peerMid = peerMid;
       const who = (l.seller || {}).username || '', same = norm(l.title) + '|' + d.total;
       if ((who && sellers.has(who)) || titles.has(same)) continue;
