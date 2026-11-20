@@ -300,6 +300,9 @@ async function catalogRun() {
   ok(m.length === 1 && m[0][0] === '5' && m[0][1] === '', 'catalog: a match without a picture is kept; a foreign one is not');
   ok(C.matches({ id: 3, cat: 68, kind: 'card', name: 'Monkey.D.Luffy', number: 'OP01-003', set: 'Romance Dawn' }, [P('3', 'Monkey.D.Luffy (003) OP01-003 Romance Dawn Regular')]).length === 1, 'catalog: One Piece numbers');
   ok(C.matches(zard, [P('2', 'Charizard 4/102 Base Set Holo PSA 10')]).length === 0, 'catalog: a graded entry is not the raw card');
+  ok(C.matches(zard, [P('1', 'Charizard (Celebrations Metal Card) 004/102 Miscellaneous Cards & Products Holo')]).length === 0, 'catalog: another product with the same number and no set named is not this card');
+  ok(C.matches({ id: 9, cat: 85, kind: 'card', name: 'Umbreon ex - 217/187', number: '217/187', set: 'SV8a: Terastal Fest ex' }, [P('1', 'Umbreon ex 217/187 Sv8a: Terastal Fest Ex Holo (Japanese)')]).length === 1 && C.matches({ id: 8, cat: 2, kind: 'card', name: 'Number 106: Giant Hand', number: 'YCSW-EN006', set: 'Yu-Gi-Oh! Championship Series Prize Cards' }, [P('1', 'Number 106: Giant Hand YCSW-EN006 Yu-Gi-Oh! Championship Series Prize Cards Limited Edition')]).length === 1, 'catalog: Japanese cards and hyphenated set names match');
+  ok(C.matches(zard, [P('1', 'Charizard 4/102 Base Set (Shadowless) Holo')]).length === 0, 'catalog: a bracketed version the card does not have is not this card');
   ok(C.candidates([{ id: 5, cat: 3, kind: 'sealed', name: 'ETB', number: '' }, { id: 6, cat: 3, kind: 'card', name: 'X', number: '1/2', market: 9 }], {}).map(x => x.id).join() === '6', 'catalog: sealed products and cards without a number are not looked up');
   // a run: budget share, found cards kept and not asked again, a game with nothing found rests
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cat-')), tf = path.join(dir, 'refresh.enc'); fs.writeFileSync(tf, C.lock('RT', 'cert'));

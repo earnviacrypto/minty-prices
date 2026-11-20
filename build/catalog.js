@@ -34,13 +34,28 @@ function catalogQuery(it) {
   const base = String(it.name || '').replace(/\s+-\s+[A-Z]{0,6}\d+[a-z]?(\/[A-Z]{0,6}\d+)?\s*$/i, '').replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
   return (base + ' ' + (D.numForms(it.number)[0] || '')).trim();
 }
+// eBay catalog titles name the set ("… Base Set Holo", "… SWSH07: Evolving Skies Holo"), so on top of the deal checks the
+// card's own set must be named, and anything in brackets ("(Celebrations Metal Card)") must be in the card's name or set.
+const RULES = 2;
+function sameCard(it, title) {
+  if (D.rejectReason(it, { title })) return false;
+  const t = ' ' + String(title).toLowerCase().replace(/[^a-z0-9/ ]+/g, ' ').replace(/\s+/g, ' ') + ' '; // "Sm-Team Up" → "sm team up"
+  const sw = D.setWords(it.set).map(w => w.replace(/-/g, ' ').trim()).filter(Boolean); // "Yu-Gi-Oh!" → "yu gi oh"; no telling words ("XY Promos"): the card number has to do
+  if (sw.some(w => !t.includes(' ' + w))) return false;
+  const mine = ' ' + String(it.name + ' ' + it.set).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ') + (+it.cat === 85 ? ' japanese' : '') + ' '; // Japanese Pokémon: eBay adds "(Japanese)"
+  for (const m of String(title).matchAll(/\(([^)]*)\)/g)) for (const w of m[1].toLowerCase().split(/[^a-z0-9]+/)) {
+    if (!w || /^\d+$/.test(w) || ['the', 'and', 'of'].includes(w)) continue;
+    if (!mine.includes(' ' + w + ' ')) return false;
+  }
+  return true;
+}
 // The catalog products that are this card: every check a deal passes, on eBay's own title. Best first: the plain printing
 // before reverse holo, 1st edition or shadowless versions (Minty picks by the printing a card is kept in).
 function matches(it, found) {
   const out = [];
   for (const p of found || []) {
     if (!p || !p.epid || !p.title) continue;
-    if (D.rejectReason(it, { title: p.title })) continue;
+    if (!sameCard(it, p.title)) continue;
     out.push([String(p.epid), (p.image && p.image.imageUrl) || '', p.title]);
   }
   const odd = t => /reverse|1st edition|first edition|shadowless|staff|pre-?release|stamped/i.test(t) ? 1 : 0;
@@ -111,6 +126,15 @@ async function runCatalog(env = {}) {
   const outBuf = await gh.download('prices', 'epid.json.gz');
   let OUT = null; try { OUT = outBuf ? JSON.parse(zlib.gunzipSync(outBuf)) : null; } catch (_) {}
   OUT = OUT && OUT.items ? OUT : { v: 1, items: {} };
+  let refiltered = false;
+  if (OUT.rules !== RULES) { refiltered = true; // matching rules changed: entries found before must pass them too; a card left with none is looked up again
+    const byId = new Map(st.items.map(x => [String(x.id), x]));
+    for (const [id, list] of Object.entries(OUT.items)) {
+      const it = byId.get(String(id)), keep = it ? list.filter(e => sameCard(it, e[2])) : [];
+      if (keep.length) OUT.items[id] = keep; else { delete OUT.items[id]; delete st.checked[id]; }
+    }
+    OUT.rules = RULES; st.games = {};
+  }
   const P = D.pacific(now);
   if (!st.budget || st.budget.day !== P.day) st.budget = { day: P.day, used: 0 };
   const allowance = Math.max(0, Math.min(CFG.dayBudget - st.budget.used, Math.ceil((CFG.dayBudget - st.budget.used) / P.hoursLeft)));
@@ -131,11 +155,11 @@ async function runCatalog(env = {}) {
     if (!env.fast) await sleep(200);
   }
   st.lastError = looked ? null : lastError;
-  if (looked || !outBuf) await gh.put('prices', 'epid.json.gz', zlib.gzipSync(Buffer.from(JSON.stringify({ v: 1, updated: new Date(now).toISOString(), count: Object.keys(OUT.items).length, items: OUT.items }))));
+  if (looked || !outBuf || refiltered) await gh.put('prices', 'epid.json.gz', zlib.gzipSync(Buffer.from(JSON.stringify({ v: 1, rules: RULES, updated: new Date(now).toISOString(), count: Object.keys(OUT.items).length, items: OUT.items }))));
   await gh.put('state', 'catalog-state.json', Buffer.from(JSON.stringify(st)));
   log(`looked up ${looked} of ${todo.length} planned (${st.budget.used} today), ${found} found, ${Object.keys(OUT.items).length} in all`);
   return { enabled: true, looked, found, total: Object.keys(OUT.items).length, error: st.lastError };
 }
 
-module.exports = { runCatalog, unlock, lock, catalogQuery, matches, candidates, CFG, Catalog };
+module.exports = { sameCard, runCatalog, unlock, lock, catalogQuery, matches, candidates, CFG, Catalog };
 if (require.main === module) runCatalog().catch(e => { console.error(e); process.exit(1); });
