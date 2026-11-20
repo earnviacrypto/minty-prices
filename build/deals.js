@@ -44,7 +44,8 @@ function rejectReason(it, l) {
   const foreignItem = it.cat === 85 || /japanese/i.test(it.set || '');
   if (!foreignItem && FOREIGN_WORDS.some(w => t.includes(' ' + w + ' ') || t.includes('-' + w + ' ') || t.includes(' ' + w + '-'))) return 'language'; // also "S-Chinese", "Chinese-Simplified"
   if (!foreignItem && +it.cat === 3 && (JP_SET.test(t) || t.includes(' pokemon card 151 '))) return 'language'; // a Japanese set code ("SV2a", "S12a", "SM11b") on an English card
-  if (it.kind === 'sealed' && l.conditionId && String(l.conditionId) !== '1000') return 'not new';
+  if (it.kind === 'sealed' && l.condition && !/^(new|ungraded)/i.test(l.condition)) return 'not new'; // used, open box, unspecified ("Ungraded": a sealed promo listed as a card)
+  if (it.kind === 'sealed' && / (eu|eu print|european) /.test(t)) return 'language';
   if (it.kind === 'sealed' && / ([2-9]|1\d) ?x | x ?([2-9]|1\d) /.test(t) && !/ ([2-9]|1\d) ?x | x ?([2-9]|1\d) /.test(norm(it.name))) return 'quantity'; // "2X …", "… x2": more than one
   if (it.kind !== 'sealed') {
     const tp = t.replace(/\//g, ' ');
@@ -157,6 +158,13 @@ function sealedTypes(t) {
   if (out.has('box') || out.has('etb') || out.has('bundle') || out.has('display') || out.has('collection') || out.has('collector')) out.delete('pack'); // "36 packs" inside a box
   return out;
 }
+// A single card still in its wrapper: a card listed as sealed, or a sealed promo (event pack, promo in cellophane) that
+// eBay files as a card. Shown under "Sealed cards", apart from loose cards and from boxes, packs and bundles.
+const SEALED_CARD = / (sealed|factory sealed|unopened|still sealed|in cellophane|cello|cellophane|blister) /;
+function sealedCard(it, l) {
+  if (it.kind === 'sealed') return /^(ungraded|graded)/i.test(l.condition || '');
+  return SEALED_CARD.test(norm(l.title)) && !/sealed/i.test(it.name || '');
+}
 function dealFrom(it, l, now) {
   if (!l || !l.price || l.price.currency !== 'USD') return null;
   if (!(l.buyingOptions || []).includes('FIXED_PRICE')) return null;
@@ -171,7 +179,7 @@ function dealFrom(it, l, now) {
   if (!(off >= CFG.minOff && off <= CFG.maxOff)) return null;
   if (rejectReason(it, l)) return null;
   return { lid: l.itemId, pid: it.id, cat: it.cat, g: it.g, kind: it.kind, name: it.name, set: it.set, number: it.number || '', title: l.title, price, ship, total, market: it.market, pct: Math.round(off * 1000) / 10,
-    cond: l.condition || '', fb: parseFloat(s.feedbackPercentage), fbScore: s.feedbackScore, img: (l.image && l.image.imageUrl) || ((l.thumbnailImages || [])[0] || {}).imageUrl || '',
+    sub: sealedCard(it, l) ? 'scard' : undefined, cond: l.condition || '', fb: parseFloat(s.feedbackPercentage), fbScore: s.feedbackScore, img: (l.image && l.image.imageUrl) || ((l.thumbnailImages || [])[0] || {}).imageUrl || '',
     url: l.itemWebUrl, aff: l.itemAffiliateWebUrl || '', found: now, checked: now };
 }
 // One listing for an item's "Check out these listings" box: the same checks as a deal (US seller with good feedback, Buy It Now,
@@ -378,7 +386,7 @@ async function runDeals(env = {}) {
   const epidsOf = it => (EP[it.id] || []).map(x => String(x[0]));
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
-  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && (d.kind === 'sealed' || d.nm) && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
+  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && (d.kind === 'sealed' || d.nm) && (d.kind !== 'sealed' || /^(new|ungraded)/i.test(d.cond || '')) && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
   const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
@@ -427,5 +435,5 @@ async function runDeals(env = {}) {
   return { enabled: true, searched, deals: deals.length };
 }
 
-module.exports = { lookOk, listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
+module.exports = { sealedCard, lookOk, listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
 if (require.main === module) runDeals().catch(e => { console.error(e); process.exit(1); });
