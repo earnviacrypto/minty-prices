@@ -286,6 +286,40 @@ async function ratesRun() {
   r = await R.main({ fetch: f, gh, unzip: () => { throw new Error('should not read again'); }, log: () => {} });
   ok(!r.changed, 'rates: the same day is not read again');
 }
+// eBay catalog numbers (build/catalog.js): the locked token opens, only true matches are kept, the budget and resting work.
+async function catalogRun() {
+  const C = require('./catalog'), zlib = require('zlib'), fs = require('fs'), os = require('os'), path = require('path');
+  ok(C.unlock(C.lock('v^1.1#i^1#r^1#abc', 'cert-secret'), 'cert-secret') === 'v^1.1#i^1#r^1#abc', 'catalog: the locked refresh token opens with the Cert ID');
+  let bad = false; try { C.unlock(C.lock('x', 'a'), 'b'); } catch (_) { bad = true; } ok(bad, 'catalog: a wrong key does not open it');
+  const P = (epid, title, img) => ({ epid, title, image: img ? { imageUrl: img } : undefined });
+  const zard = { id: 1, cat: 3, kind: 'card', name: 'Charizard', number: '4/102', set: 'Base Set' };
+  ok(C.catalogQuery({ name: 'Umbreon VMAX (Alternate Art Secret)', number: '215/203' }) === 'Umbreon VMAX 215/203', 'catalog: searched by name and number');
+  let m = C.matches(zard, [P('9', 'Blastoise 2/102 Base Set Holo'), P('8', 'Charizard 4/102 Base Set Holo 1st Edition', 'a.jpg'), P('7', 'Charizard 4/102 Base Set Holo', 'b.jpg'), P('6', 'Charizard 4/130 Base Set 2 Holo')]);
+  ok(m.length === 2 && m[0][0] === '7' && m[1][0] === '8', 'catalog: other cards and numbers left out; the plain printing first');
+  m = C.matches({ id: 2, cat: 3, kind: 'card', name: 'Pikachu ex - 247/191', number: '247/191', set: 'SV08: Surging Sparks' }, [P('5', 'Pikachu ex 247/191 Sv08: Surging Sparks Holo'), P('4', 'Pikachu ex 247/191 Japanese Holo')]);
+  ok(m.length === 1 && m[0][0] === '5' && m[0][1] === '', 'catalog: a match without a picture is kept; a foreign one is not');
+  ok(C.matches({ id: 3, cat: 68, kind: 'card', name: 'Monkey.D.Luffy', number: 'OP01-003', set: 'Romance Dawn' }, [P('3', 'Monkey.D.Luffy (003) OP01-003 Romance Dawn Regular')]).length === 1, 'catalog: One Piece numbers');
+  ok(C.matches(zard, [P('2', 'Charizard 4/102 Base Set Holo PSA 10')]).length === 0, 'catalog: a graded entry is not the raw card');
+  ok(C.candidates([{ id: 5, cat: 3, kind: 'sealed', name: 'ETB', number: '' }, { id: 6, cat: 3, kind: 'card', name: 'X', number: '1/2', market: 9 }], {}).map(x => x.id).join() === '6', 'catalog: sealed products and cards without a number are not looked up');
+  // a run: budget share, found cards kept and not asked again, a game with nothing found rests
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cat-')), tf = path.join(dir, 'refresh.enc'); fs.writeFileSync(tf, C.lock('RT', 'cert'));
+  const store = { state: { 'deals-state.json': Buffer.from(JSON.stringify({ items: [Object.assign({ g: 1, market: 50 }, zard)].concat(Array.from({ length: 45 }, (_, i) => ({ id: 100 + i, cat: 2, g: 2, kind: 'card', name: 'Dark Magician', number: 'LOB-' + String(i).padStart(3, '0'), set: 'LOB', market: 20 }))) })) }, prices: {}, history: {} };
+  const gh = { async download(t, n) { return (store[t] || {})[n] || null; }, async put(t, n, b) { (store[t] = store[t] || {})[n] = Buffer.from(b); } };
+  let asked = [];
+  const catalog = { async search(it) { asked.push(it.id); return it.id === 1 ? [P('7', 'Charizard 4/102 Base Set Holo', 'b.jpg')] : []; } };
+  const now = Date.parse('2026-11-20T18:00:00Z');
+  let r = await C.runCatalog({ gh, catalog, appId: 'a', certId: 'cert', tokenFile: tf, now, fast: true, log: () => {} });
+  const out = JSON.parse(zlib.gunzipSync(store.prices['epid.json.gz']));
+  ok(r.enabled && out.items[1][0][0] === '7' && out.count === 1, 'catalog: a found card is published with its eBay number and picture');
+  const st = JSON.parse(store.state['catalog-state.json']);
+  ok(st.budget.used === asked.length && asked.length <= Math.ceil(C.CFG.dayBudget / 1), 'catalog: lookups counted against the day');
+  ok(st.games[2].restUntil > now, 'catalog: a game with nothing in eBay\'s catalog after 40 lookups rests');
+  asked = []; r = await C.runCatalog({ gh, catalog, appId: 'a', certId: 'cert', tokenFile: tf, now: now + 3600000, fast: true, log: () => {} });
+  ok(!asked.includes(1) && !asked.some(id => id >= 100), 'catalog: a found card and a resting game are not asked again');
+  r = await C.runCatalog({ gh, catalog, appId: 'a', certId: '', tokenFile: tf, now, fast: true, log: () => {} });
+  ok(!r.enabled, 'catalog: no Cert ID – not running');
+}
+
 (async () => {
   // Run 1: first pull + the archive days before it
   let r = await main({ fetch: fakeFetch, gh, cfg, gap: 0, log: quiet, sevenZip: '7z' });
@@ -344,5 +378,6 @@ async function ratesRun() {
   await gradingRun();
   await reportsRun();
   await ratesRun();
+  await catalogRun();
   console.log('minty-prices: ' + n + ' checks passed');
 })().catch(e => { console.error(e); process.exit(1); });

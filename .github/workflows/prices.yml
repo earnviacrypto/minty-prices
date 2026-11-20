@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push: # a change to the job runs it at once
     branches: [main]
-    paths: ['build/**', 'config.json', '.github/workflows/prices.yml']
+    paths: ['build/**', 'config.json', '.github/workflows/prices.yml', 'auth/refresh.enc']
 permissions:
   contents: write
   actions: write # lets the job start its next run itself
@@ -40,6 +40,13 @@ jobs:
           EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
           EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: eBay catalog numbers
+        if: always()
+        run: node build/catalog.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
       - name: Exchange rates
         if: always()
         run: node build/rates.js
