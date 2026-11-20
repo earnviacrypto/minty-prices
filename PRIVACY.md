@@ -19,7 +19,7 @@ Everything you enter in Minty: the items in your collection, what you paid, sale
 To show prices and pictures, Minty downloads public information from:
 
 - Minty's shared price copy on GitHub (earnviacrypto/minty-prices): daily market prices, price history, market indexes, graded prices, eBay deals and eBay listings.
-- Public card databases and price sources, such as TCGplayer's prices (through TCGCSV), PokeInvest, Scryfall, TCGdex and others listed under Settings → Price sources in Minty.
+- Free public card databases and price lists.
 
 Like any website, these services can see your computer's internet (IP) address when Minty downloads from them. Minty sends them nothing about you or your collection – only the name or number of the card or product being looked up.
 
