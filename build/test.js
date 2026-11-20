@@ -269,6 +269,23 @@ const gh = { calls: 0,
 const cfg = { categories: [3, 89], archiveStart: START, historyBucketBytes: 10 };
 const quiet = () => {};
 
+// Exchange rates (build/rates.js): the bank's history file read oldest-first; nothing done when the day is already in.
+async function ratesRun() {
+  const R = require('./rates');
+  const days = []; for (let i = 0; i < 1200; i++) days.push(new Date(Date.UTC(2026, 10, 19) - i * 864e5).toISOString().slice(0, 10));
+  const csv = 'Date,USD,JPY,BGN,GBP,KRW,CNY,\n' + days.map((d, i) => `${d},${(1.15 + i / 1e5).toFixed(4)},180.5,N/A,0.86,1700.1,${i % 7 ? '8.1' : 'N/A'},`).join('\n') + '\n2009-12-31,1.4,130,1.9,0.9,1600,9.8,';
+  const p = R.parseHist(csv);
+  ok(p.dates[0] < p.dates[1] && p.updated === '2026-11-19' && !p.dates.includes('2009-12-31'), 'rates: oldest first, from 2010, newest day known');
+  ok(p.rates.USD[p.rates.USD.length - 1] === 1.15 && p.rates.GBP[0] === 0.86 && !('BGN' in p.rates), 'rates: values in place, currencies Minty does not offer left out');
+  ok(p.rates.CNY.some(v => v === null) && p.rates.CNY.length === p.dates.length, 'rates: a missing rate stays empty, never guessed');
+  ok(R.dailyDate('<Cube time="2026-11-19">') === '2026-11-19', 'rates: the daily file\'s date');
+  const store = {}, gh = { download: async (t, n) => store[n] || null, put: async (t, n, b) => { store[n] = b; } };
+  const f = async u => ({ text: async () => '<Cube time=\'2026-11-19\'>', arrayBuffer: async () => new ArrayBuffer(4) });
+  let r = await R.main({ fetch: f, gh, unzip: () => csv, log: () => {} });
+  ok(r.changed && JSON.parse(zlib.gunzipSync(store['rates.json.gz'])).updated === '2026-11-19', 'rates: published');
+  r = await R.main({ fetch: f, gh, unzip: () => { throw new Error('should not read again'); }, log: () => {} });
+  ok(!r.changed, 'rates: the same day is not read again');
+}
 (async () => {
   // Run 1: first pull + the archive days before it
   let r = await main({ fetch: fakeFetch, gh, cfg, gap: 0, log: quiet, sevenZip: '7z' });
@@ -326,5 +343,6 @@ const quiet = () => {};
   await gradedRun();
   await gradingRun();
   await reportsRun();
+  await ratesRun();
   console.log('minty-prices: ' + n + ' checks passed');
 })().catch(e => { console.error(e); process.exit(1); });

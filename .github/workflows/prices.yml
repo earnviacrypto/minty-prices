@@ -40,6 +40,11 @@ jobs:
           EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
           EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: Exchange rates
+        if: always()
+        run: node build/rates.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Graded prices
         if: always()
         run: node build/graded.js
