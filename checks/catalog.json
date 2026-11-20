@@ -1,11 +1,335 @@
 {
- "at": "2026-11-20T06:36:20.489Z",
+ "at": "2026-11-20T06:36:56.594Z",
  "token": {
   "status": 400,
   "error": "invalid_grant",
   "description": "the provided authorization refresh token is invalid or was issued to another client"
  },
- "results": [],
+ "results": [
+  {
+   "game": "Pokémon",
+   "q": "Charizard 4/102 Base Set",
+   "cat": "",
+   "status": 200,
+   "found": [
+    {
+     "title": "Charizard 4/102 Base Set Holo",
+     "epid": "24043367933",
+     "image": "https://i.ebayimg.com/00/s/ODUwWDYxMQ==/z/z9kAAeSwLTxpw8BT/$_57.PNG?set_id=2",
+     "more": 1
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Charizard 4/102 Base Set",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Charizard 4/102 Base Set Holo",
+     "epid": "24043367933",
+     "image": "https://i.ebayimg.com/00/s/ODUwWDYxMQ==/z/z9kAAeSwLTxpw8BT/$_57.PNG?set_id=2",
+     "more": 1
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Charizard 4/102 Base Set",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Charizard 4/102 Base Set Holo",
+     "epid": "24043367933",
+     "image": "https://i.ebayimg.com/00/s/ODUwWDYxMQ==/z/z9kAAeSwLTxpw8BT/$_57.PNG?set_id=2",
+     "more": 1
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Pikachu ex 247/191 Surging Sparks",
+   "cat": "",
+   "status": 200,
+   "found": [
+    {
+     "title": "Pikachu ex 247/191 Sv08: Surging Sparks Holo",
+     "epid": "10072638980",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Pikachu ex 247/191 Surging Sparks",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Pikachu ex 247/191 Sv08: Surging Sparks Holo",
+     "epid": "10072638980",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Pikachu ex 247/191 Surging Sparks",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Pikachu ex 247/191 Sv08: Surging Sparks Holo",
+     "epid": "10072638980",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Umbreon VMAX 215/203",
+   "cat": "",
+   "status": 200,
+   "found": [
+    {
+     "title": "Umbreon VMAX (Alternate Art Secret) 215/203 SWSH07: Evolving Skies Holo",
+     "epid": "24048923237",
+     "image": "https://i.ebayimg.com/images/g/fB8AAeSwZcFpr-SY/s-l1600.jpg",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Umbreon VMAX 215/203",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Umbreon VMAX (Alternate Art Secret) 215/203 SWSH07: Evolving Skies Holo",
+     "epid": "24048923237",
+     "image": "https://i.ebayimg.com/images/g/fB8AAeSwZcFpr-SY/s-l1600.jpg",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Pokémon",
+   "q": "Umbreon VMAX 215/203",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Umbreon VMAX (Alternate Art Secret) 215/203 SWSH07: Evolving Skies Holo",
+     "epid": "24048923237",
+     "image": "https://i.ebayimg.com/images/g/fB8AAeSwZcFpr-SY/s-l1600.jpg",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Magic",
+   "q": "Sol Ring",
+   "cat": "",
+   "status": 200,
+   "found": [
+    {
+     "title": "Sol Ring Commander Regular",
+     "epid": "18041750523",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Magic",
+   "q": "Sol Ring",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Sol Ring Commander Regular",
+     "epid": "18041750523",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Magic",
+   "q": "Sol Ring",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Sol Ring Commander Regular",
+     "epid": "18041750523",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Yu-Gi-Oh!",
+   "q": "Dark Magician LOB",
+   "cat": "",
+   "status": 204,
+   "found": []
+  },
+  {
+   "game": "Yu-Gi-Oh!",
+   "q": "Dark Magician LOB",
+   "cat": "183454",
+   "status": 204,
+   "found": []
+  },
+  {
+   "game": "Yu-Gi-Oh!",
+   "q": "Dark Magician LOB",
+   "cat": "2536",
+   "status": 204,
+   "found": []
+  },
+  {
+   "game": "One Piece",
+   "q": "Monkey.D.Luffy OP01-003",
+   "cat": "",
+   "status": 200,
+   "found": [
+    {
+     "title": "Monkey.D.Luffy (003) OP01-003 Romance Dawn Regular",
+     "epid": "16072894761",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "One Piece",
+   "q": "Monkey.D.Luffy OP01-003",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Monkey.D.Luffy (003) OP01-003 Romance Dawn Regular",
+     "epid": "16072894761",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "One Piece",
+   "q": "Monkey.D.Luffy OP01-003",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Monkey.D.Luffy (003) OP01-003 Romance Dawn Regular",
+     "epid": "16072894761",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Lorcana",
+   "q": "Elsa Spirit of Winter",
+   "cat": "",
+   "status": 200,
+   "found": [
+    {
+     "title": "Elsa - Spirit of Winter 43/204 Fabled Regular",
+     "epid": "8084726398",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Lorcana",
+   "q": "Elsa Spirit of Winter",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Elsa - Spirit of Winter 43/204 Fabled Regular",
+     "epid": "8084726398",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Lorcana",
+   "q": "Elsa Spirit of Winter",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Elsa - Spirit of Winter 43/204 Fabled Regular",
+     "epid": "8084726398",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Riftbound",
+   "q": "Teemo Swift Scout",
+   "cat": "",
+   "status": 204,
+   "found": []
+  },
+  {
+   "game": "Riftbound",
+   "q": "Teemo Swift Scout",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Llanowar Scout Dominaria Regular",
+     "epid": "3041757637",
+     "image": "https://i.ebayimg.com/images/g/DxwAAOSwk3pmqUVy/s-l1600.jpg",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Riftbound",
+   "q": "Teemo Swift Scout",
+   "cat": "2536",
+   "status": 200,
+   "found": [
+    {
+     "title": "Llanowar Scout Dominaria Regular",
+     "epid": "3041757637",
+     "image": "https://i.ebayimg.com/images/g/DxwAAOSwk3pmqUVy/s-l1600.jpg",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Sealed",
+   "q": "Pokemon Surging Sparks Elite Trainer Box",
+   "cat": "",
+   "status": 204,
+   "found": []
+  },
+  {
+   "game": "Sealed",
+   "q": "Pokemon Surging Sparks Elite Trainer Box",
+   "cat": "183454",
+   "status": 200,
+   "found": [
+    {
+     "title": "Duraludon (Surging Sparks) 129/191 Miscellaneous Cards & Products Holo",
+     "epid": "17087339799",
+     "more": 0
+    }
+   ]
+  },
+  {
+   "game": "Sealed",
+   "q": "Pokemon Surging Sparks Elite Trainer Box",
+   "cat": "2536",
+   "status": 204,
+   "found": []
+  }
+ ],
  "secret": {
   "length": 2376,
   "start": "v^1.1#",
