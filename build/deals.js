@@ -417,7 +417,7 @@ async function runDeals(env = {}) {
           try { k = Object.assign(await eb.look(l.itemId), { at: now }); st.look[d.lid] = k; st.budget.look++; } catch (e) { log('look', e.message); if (e.limit) break; }
         }
         if (lookOk(it, k, epidsOf(it))) continue;
-        d.nm = 1;
+        d.nm = 1; d.cc = k.c; // the seller's Card Condition, shown on the deal
       }
       if (old.has(d.lid)) d.found = old.get(d.lid).found; else if (firstSeen.has(d.lid)) d.found = firstSeen.get(d.lid);
       deals.push(d);
