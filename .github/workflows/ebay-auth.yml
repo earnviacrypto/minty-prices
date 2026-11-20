@@ -1,0 +1,56 @@
+# One-time eBay sign-in for the Catalog API (stock pictures).
+# auth/code.txt holds the one-use code from eBay's "Thank You" page (it expires in 5 minutes and is useless without the
+# Cert ID secret). This job swaps it for a refresh token (18 months), checks one catalog search works, and keeps the
+# refresh token in auth/refresh.enc, locked with the EBAY_CERT_ID secret. The code file is then deleted.
+name: eBay sign-in
+on:
+  push:
+    paths: ['auth/code.txt']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: ebay-auth
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swap the code for a refresh token
+        env:
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+          RUNAME: Pavel_Sergeyev-PavelSer-MintyT-fhhoeufe
+        run: |
+          set -e
+          [ -s auth/code.txt ] || { echo "no code"; exit 0; }
+          RAW=$(tr -d ' \r\n' < auth/code.txt)
+          # Accept the whole page address or just the code; the code in the address is already URL-encoded.
+          CODE=$(printf '%s' "$RAW" | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')
+          [ -n "$CODE" ] || CODE=$(python3 -c "import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=''))" "$RAW")
+          BASIC=$(printf '%s:%s' "$EBAY_APP_ID" "$EBAY_CERT_ID" | base64 -w0)
+          curl -sS -X POST https://api.ebay.com/identity/v1/oauth2/token \
+            -H "Authorization: Basic $BASIC" -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data "grant_type=authorization_code&code=$CODE&redirect_uri=$RUNAME" -o tok.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open('tok.json'))
+          if 'refresh_token' not in d:
+              print('eBay said:', {k: v for k, v in d.items() if 'token' not in k}); raise SystemExit(1)
+          print('refresh token received, valid for', round(d.get('refresh_token_expires_in', 0) / 86400), 'days')
+          open('rt.txt', 'w').write(d['refresh_token']); open('at.txt', 'w').write(d['access_token'])
+          PY
+          AT=$(cat at.txt)
+          echo "Catalog check:"
+          curl -sS "https://api.ebay.com/commerce/catalog/v1_beta/product_summary/search?q=charizard%20base%20set&category_ids=183454&limit=3" \
+            -H "Authorization: Bearer $AT" -H 'X-EBAY-C-MARKETPLACE-ID: EBAY_US' -o cat.json -w 'HTTP %{http_code}\n'
+          python3 -c "
+          import json; d=json.load(open('cat.json'))
+          for p in d.get('productSummaries', [])[:3]: print(' -', p.get('title'), '|', (p.get('image') or {}).get('imageUrl'))
+          print(' errors:', d.get('errors')) if d.get('errors') else None"
+          mkdir -p auth
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:EBAY_CERT_ID -in rt.txt -out auth/refresh.enc
+          rm -f rt.txt at.txt tok.json cat.json auth/code.txt
+          git config user.name 'minty-bot'; git config user.email 'minty-bot@users.noreply.github.com'
+          git add -A auth
+          git commit -m 'eBay sign-in: refresh token stored (locked with the Cert ID secret); code removed'
+          git push
