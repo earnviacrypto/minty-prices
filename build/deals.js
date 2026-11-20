@@ -71,6 +71,17 @@ function rejectReason(it, l) {
     const sw = setWords(it.set);
     if (!sw.length || sw.some(w => !t.includes(' ' + w))) return 'set';
   }
+  // Another edition of the product: an anniversary or edition number ("30th", "25th") or a year newer than the set.
+  const mineAll = norm(it.name + ' ' + it.set);
+  // "30th Anniversary" on a 2021 Celebrations box: the game's Nth anniversary falls in another year than the set's
+  if (it.yr && LAUNCH[it.cat]) for (const m of t.matchAll(/ (\d{1,2})(st|nd|rd|th) anniversary /g)) if (Math.abs(LAUNCH[it.cat] + +m[1] - it.yr) > 1 && !mineAll.includes(' ' + m[1] + m[2] + ' ')) return 'edition';
+  // sealed only: card sellers often write the wrong year
+  if (it.yr && it.kind === 'sealed') for (const m of t.matchAll(/ (20[1-3]\d) /g)) if (+m[1] > it.yr + 1 && !mineAll.includes(' ' + m[1] + ' ')) return 'edition';
+  if (it.kind === 'sealed') {
+    const odd = SEALED_ODD.find(w => t.includes(w) && !mineAll.includes(w));
+    if (odd) return 'not the same product';
+    if (mineAll.includes(' pokemon center ') && !t.includes(' pokemon center ')) return 'not the same product';
+  }
   if (it.kind === 'sealed') { // a booster box listing must not be a bundle, an ETB or a set of something else
     const want = sealedTypes(norm(it.name)), got = sealedTypes(t);
     if (want.size && ![...want].some(x => got.has(x))) return 'type';
@@ -83,6 +94,11 @@ function rejectReason(it, l) {
 // Games where a card number alone names the printing (Pokémon); elsewhere variants share the number.
 const UNIQUE_NO = new Set([3, 85]);
 const VARIANT_FLAGS = [[' alt art ', 'alternate'], [' alternate art ', 'alternate'], [' parallel ', 'parallel'], [' aa ', 'parallel'], [' sp ', 'sp'], [' manga ', 'manga'], [' anniversary ', 'anniversary'], [' wanted poster ', 'wanted'], [' treasure rare ', 'treasure'], [' premium card collection ', 'premium'], [' best selection ', 'best']];
+// Words in a sealed listing that make it another product, unless the product's own name has them: a store's own version,
+// part of a box, an incomplete or opened one, a pre-order, an Asian (OCG) printing.
+// The year each game began, for its anniversary products (Pokémon's 25th = 2021, 30th = 2026).
+const LAUNCH = { 1: 1993, 2: 1999, 3: 1996, 85: 1996 };
+const SEALED_ODD = [' pokemon center ', ' costco ', ' sam s club ', ' walmart ', ' target exclusive ', ' gamestop ', ' half ', ' 18 packs ', ' missing ', ' incomplete ', ' no foil ', ' pre-order ', ' preorder ', ' pre order ', ' ocg ', ' prerelease ', ' pre-release ', ' build battle ', ' international '];
 const EVENT_FLAGS = [' stamped ', ' prerelease ', ' pre-release ', ' staff ', ' championship ', ' judge ', ' prize pack ', ' play pokemon '];
 // Japanese Pokémon set codes: a letter after the number (SV2a, SV5k, S12a, SM11b, M2a). English codes have none (SV08, ME01).
 const JP_SET = / (sv\d{1,2}[a-z]|s\d{1,2}[a-z]|sm\d{1,2}[a-z]|m\d[a-z]) /;
@@ -167,7 +183,7 @@ function itemsFrom(indexes, priceFiles) {
     const pf = priceFiles[cat]; if (!pf) continue;
     const ids = new Set([].concat(x.cards && x.cards.ids || [], x.sealed && x.sealed.ids || []));
     if (!ids.size) continue;
-    const setName = new Map((pf.groups || []).map(g => [String(g.groupId), g.name]));
+    const setName = new Map((pf.groups || []).map(g => [String(g.groupId), g.name])), setYear = new Map((pf.groups || []).map(g => [String(g.groupId), relYear(g)]));
     for (const [g, list] of Object.entries(pf.products || {})) {
       const pr = (pf.prices || {})[g] || {};
       const minOf = id => { const v = Object.values(pr[id] || {}).filter(p => p > 0); return v.length ? Math.min(...v) : null; };
@@ -176,12 +192,14 @@ function itemsFrom(indexes, priceFiles) {
         let market = minOf(p[0]);
         if (p[5] && p[2]) for (const q of list) if (q !== p && q[5] && q[2] === p[2]) { const m = minOf(q[0]); if (m && (!market || m < market)) market = m; }
         if (!(market >= CFG.minMarket)) continue;
-        out.push({ id: p[0], cat: +cat, g: +g, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: setName.get(String(g)) || '', market });
+        out.push({ id: p[0], cat: +cat, g: +g, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: setName.get(String(g)) || '', yr: setYear.get(String(g)) || null, market });
       }
     }
   }
   return out;
 }
+// A set's release year when TCGplayer gives a real release date (a plain day); older sets carry the date it last touched them.
+function relYear(g) { const d = String((g && g.publishedOn) || ''); return /T00:00:00(\.0+)?$/.test(d) ? +d.slice(0, 4) : null; }
 // Pacific-time day (eBay's quota day) and how many hours of it are left.
 function pacific(now) {
   const d = new Date(now), parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(d);
@@ -195,7 +213,7 @@ const LIST_SKIP = /code card|jumbo|oversized|promo|pop series|trainer kit|miscel
 const LIST_SHARE = { 3: 0.38, 68: 0.14, 1: 0.10, 71: 0.07, 2: 0.07, 89: 0.07, 85: 0.05 };
 // Every game gets at least LIST_MIN items, so a card page always has a full row of 4 others to show; the extra slots come
 // out of the biggest game's share. A game raised to the minimum lists its sealed products first (its booster boxes).
-const LIST_MIN = 8, SEALED_HI = 1000, LIST_V = '/list4'; // LIST_V: bump to rebuild the watched list at once
+const LIST_MIN = 8, SEALED_HI = 1000, LIST_V = '/list5'; // LIST_V: bump to rebuild the watched list at once
 function listSlots(cats, total) {
   const known = cats.filter(c => LIST_SHARE[c]), rest = cats.filter(c => !LIST_SHARE[c]);
   const restShare = Math.max(0, 1 - known.reduce((a, c) => a + LIST_SHARE[c], 0));
@@ -220,7 +238,7 @@ function listPick(priceFiles, total = CFG.listTop) {
     const queues = groups.map(g => {
       const pr = (pf.prices || {})[g.groupId] || {}, list = (pf.products || {})[g.groupId] || [];
       const mk = id => { const v = Object.values(pr[id] || {}).filter(x => x > 0); return v.length ? Math.min(...v) : null; };
-      const rows = list.map(p => ({ id: p[0], cat: +cat, g: g.groupId, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: g.name, market: mk(p[0]) })).filter(x => x.market);
+      const rows = list.map(p => ({ id: p[0], cat: +cat, g: g.groupId, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: g.name, yr: relYear(g), market: mk(p[0]) })).filter(x => x.market);
       const cards = rows.filter(x => x.kind === 'card' && x.market >= CFG.listLo && x.market <= CFG.listHi).sort((a, b) => b.market - a.market).slice(0, CFG.perSetCards);
       // boxes, ETBs, bundles – not cases
       const sealed = rows.filter(x => x.kind === 'sealed' && x.market >= CFG.minMarket && x.market <= SEALED_HI && !/\bcase\b/i.test(x.name)).sort((a, b) => b.market - a.market).slice(0, CFG.perSetSealed);
