@@ -99,6 +99,8 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
     ok(rj(ray, 'Rayquaza EX (Shiny) XY69 Holo Promo XY Promo Pokemon Moderately Played') === 'played', 'a played copy is not compared with the Near Mint price');
     ok(rj(ray, 'Rayquaza EX (Shiny) - XY69 - Promo - XY Holo - Pokemon TCG - MP') === 'played' && rj(ray, 'Rayquaza EX XY69 Shiny Promo HP/MP+') === 'played', 'LP / MP / HP condition codes, also with a slash');
     ok(rj({ name: 'Venusaur EX - XY123', set: 'XY Promos', number: 'XY123' }, 'Pokémon Venusaur EX Full Art Holo Promo XY123 XY 180 HP Jungle Hammer') === '', 'HP after a number is the hit points, not Heavily Played');
+    ok(rj({ name: 'Charizard ex - 234/091', set: 'SV: Paldean Fates', number: '234/091' }, 'Pokémon NON-TCG Charizard EX Paldean Fates Sir 234/091 Daway Metal Diamond') === 'bad word', 'a metal / non-TCG custom is not the card');
+    ok(rj({ name: 'Charizard (Celebrations Metal Card)', set: 'Miscellaneous Cards & Products', number: '004/102' }, 'Pokemon Charizard Celebrations Metal Card 004/102 Gold') !== 'bad word', 'the real Celebrations metal Charizard is not thrown out for saying metal');
     ok(rj({ name: 'Umbreon & Darkrai GX - SM241', set: 'SM Promos', number: 'SM241' }, 'Umbreon & Darkrai GX SM241 JUMBO OVERSIZED Pokémon Promo Near Mint') === 'jumbo', 'a jumbo card is not the normal card');
     ok(rj({ name: 'Magikarp - 203/193', set: 'SV02: Paldea Evolved', number: '203/193' }, 'Magikarp 30th Celebrations Illustration Rare 203/193') === 'other set', 'a Celebration reprint is not the original');
     ok(rj({ kind: 'sealed', name: 'Two Legends - Booster Box', set: 'Two Legends', cat: 68 }, 'S-Chinese OPC-08 Booster Box One Piece TCG Two Legends') === 'language', 'S-Chinese is Chinese');
