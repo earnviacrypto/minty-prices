@@ -1,0 +1,26 @@
+# One-off: check that eBay returns the Card Condition and catalog product on US listings. Results in the "checks" release.
+name: Condition check
+on:
+  push:
+    paths: ['tools/cond-check.js', '.github/workflows/cond-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Today's deals
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download prices -p deals.json -R ${{ github.repository }}
+      - name: Look up listings
+        env: { EBAY_APP_ID: '${{ secrets.EBAY_APP_ID }}', EBAY_CERT_ID: '${{ secrets.EBAY_CERT_ID }}' }
+        run: node tools/cond-check.js
+      - name: Publish
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          gh release view checks >/dev/null 2>&1 || gh release create checks --title checks --notes 'One-off checks'
+          gh release upload checks cond-check.json --clobber
