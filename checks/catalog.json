@@ -1,10 +1,6 @@
 {
- "at": "2026-11-20T06:36:56.594Z",
- "token": {
-  "status": 400,
-  "error": "invalid_grant",
-  "description": "the provided authorization refresh token is invalid or was issued to another client"
- },
+ "at": "2026-11-20T06:46:22.418Z",
+ "token": "ok, access token valid 7200 s",
  "results": [
   {
    "game": "Pokémon",
@@ -331,10 +327,9 @@
   }
  ],
  "secret": {
-  "length": 2376,
+  "length": 96,
   "start": "v^1.1#",
-  "refreshMarker": false,
+  "refreshMarker": true,
   "hasSpaces": false
- },
- "asUserToken": 204
+ }
 }
