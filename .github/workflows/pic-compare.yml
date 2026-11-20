@@ -1,0 +1,21 @@
+# One-off: compare eBay catalog pictures with TCGplayer's pictures of the same cards. Results in the "checks" release.
+name: Picture check
+on:
+  push:
+    paths: ['tools/pic-compare.py', '.github/workflows/pic-compare.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install --quiet pillow imagehash
+      - run: python3 tools/pic-compare.py
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view checks >/dev/null 2>&1 || gh release create checks --title checks --notes 'One-off checks'
+          gh release upload checks pic-compare.json pic-compare-*.jpg --clobber
