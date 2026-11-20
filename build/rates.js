@@ -45,5 +45,6 @@ async function main(env = {}) {
   return { changed: true, updated: out.updated };
 }
 
-if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
+// A failed read (bank site down) never fails the hourly run: the last good file stays, the next run tries again.
+if (require.main === module) main().catch(e => { console.error('Rates: not updated this run –', e.message); });
 module.exports = { parseHist, dailyDate, main, CUR };
