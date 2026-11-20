@@ -106,6 +106,9 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   D.useSetNames({ 3: ['ME01: Mega Evolution', 'ME03: Perfect Order', 'SV: White Flare'] });
   ok(rj({ kind: 'sealed', name: 'Mega Evolution Booster Bundle', set: 'ME01: Mega Evolution' }, 'Pokemon Mega Evolution Perfect Order 3 Pack Booster Bundle') === 'other set', 'another set named in the title');
   D.useSetNames({});
+  ok(rj({ cat: 3, name: 'Squirtle - 170/165', number: '170/165', set: 'SV: Scarlet & Violet 151' }, 'Squirtle 170/165 Holofoil - SV2a: Pokemon Card 151 AR') === 'language', 'a Japanese set code on an English card');
+  ok(rj({ cat: 3, name: 'Squirtle - 170/165', number: '170/165', set: 'SV: Scarlet & Violet 151' }, 'Squirtle 170/165 Scarlet Violet 151 Illustration Rare') === '', 'the English card still matches');
+  ok(rj({ cat: 3, name: 'Basic Darkness Energy (Cracked Ice Holo)', number: '015', set: 'SVE: Scarlet & Violet Energies' }, 'Play Pokemon Basic Darkness Energy Prize Pack Series Cracked Ice Holo 015') === 'version', 'a Prize Pack stamp is another version');
   const dd = [{ lid: 'a', pid: 1, title: 'X', total: 10, pct: 50 }, { lid: 'a', pid: 2, title: 'X', total: 10, pct: 40 }, { lid: 'b', pid: 1, title: 'X', total: 10, pct: 45 }];
   ok(D.cleanDeals(dd).length === 1, 'an eBay listing shows once, and one seller\'s identical copies once');
   const lst = D.listingFrom(card, L('Pokemon Umbreon VMAX 215/203 Evolving Skies Alt Art NM', 1700, { itemAffiliateWebUrl: 'https://www.ebay.com/itm/1?campid=5339254309' }));
@@ -117,6 +120,10 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
     prices: { 1: { 100: { Holofoil: 40 } }, 2: { 200: { Normal: 1 }, 201: { Holofoil: 30 }, 202: { Holofoil: 900 }, 203: { Normal: 140 } } } } };
   const pk = D.listPick(pfs, 100).map(x => x.id);
   ok(pk.join() === '201,203,100', 'listings pick: $5–$250 cards and sealed, newest set first, a handful from each set, newest first: ' + pk.join());
+  const sl = D.listSlots(['1', '2', '3', '16', '17', '20', '24', '25', '26', '27', '57', '58', '62', '63', '65', '66', '67', '68', '71', '72', '73', '74', '77', '79', '80', '81', '83', '85', '86', '87', '89', '91', '92'], 650);
+  ok(sl.slots['92'] === 8 && sl.slots['86'] === 8 && Object.values(sl.slots).reduce((a, b) => a + b, 0) === 650 && sl.raised.has('92') && !sl.raised.has('3'), 'listings pick: every game at least 8, the total unchanged');
+  const pfs2 = { 92: { groups: [{ groupId: 5, name: 'Night City', publishedOn: '2026-01-01T00:00:00' }], products: { 5: [[500, 'Booster Box', '', '', '', 0], [501, 'Card A', '1/9', 'R', '', 1], [502, 'Card B', '2/9', 'R', '', 1]] }, prices: { 5: { 500: { Normal: 310 }, 501: { Normal: 12 }, 502: { Normal: 9 } } } } };
+  ok(D.listPick(Object.assign({}, pfs, pfs2), 12).filter(x => x.cat === 92)[0].id === 500, 'listings pick: a small game\'s $310 booster box is watched, first');
   ok(D.plan(its, { checked: {} }, [], t0, 2).map(x => x.id).join() === '1,3', 'plan: dear items first when short of searches');
 }
 

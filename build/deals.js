@@ -42,6 +42,7 @@ function rejectReason(it, l) {
   if (BAD_WORDS.some(w => t.includes(' ' + w + ' '))) return 'bad word';
   const foreignItem = it.cat === 85 || /japanese/i.test(it.set || '');
   if (!foreignItem && FOREIGN_WORDS.some(w => t.includes(' ' + w + ' '))) return 'language';
+  if (!foreignItem && +it.cat === 3 && (JP_SET.test(t) || t.includes(' pokemon card 151 '))) return 'language'; // a Japanese set code ("SV2a", "S12a", "SM11b") on an English card
   if (it.kind !== 'sealed') {
     if (GRADED_WORDS.some(w => t.includes(' ' + w + ' '))) return 'graded';
     if (l.conditionId === '2750' || /^graded/i.test(l.condition || '')) return 'graded';
@@ -82,7 +83,9 @@ function rejectReason(it, l) {
 // Games where a card number alone names the printing (Pokémon); elsewhere variants share the number.
 const UNIQUE_NO = new Set([3, 85]);
 const VARIANT_FLAGS = [[' alt art ', 'alternate'], [' alternate art ', 'alternate'], [' parallel ', 'parallel'], [' aa ', 'parallel'], [' sp ', 'sp'], [' manga ', 'manga'], [' anniversary ', 'anniversary'], [' wanted poster ', 'wanted'], [' treasure rare ', 'treasure'], [' premium card collection ', 'premium'], [' best selection ', 'best']];
-const EVENT_FLAGS = [' stamped ', ' prerelease ', ' pre-release ', ' staff ', ' championship ', ' judge '];
+const EVENT_FLAGS = [' stamped ', ' prerelease ', ' pre-release ', ' staff ', ' championship ', ' judge ', ' prize pack ', ' play pokemon '];
+// Japanese Pokémon set codes: a letter after the number (SV2a, SV5k, S12a, SM11b, M2a). English codes have none (SV08, ME01).
+const JP_SET = / (sv\d{1,2}[a-z]|s\d{1,2}[a-z]|sm\d{1,2}[a-z]|m\d[a-z]) /;
 const EVENT_SET = /promo|event|tournament|prize|pre-?release|championship|celebration|anniversary|premium card|judge|store|league/i;
 // Words in a card name's brackets, each with the ways sellers write it. Plain printing words are not required.
 const VARIANT_SKIP = new Set(['version', 'set', 'card', 'cards', 'the', 'and', 'non', 'foil', 'holofoil', 'normal', 'english', 'eng', 'pack', 'promo', 'edition', 'print', 'printing']);
@@ -190,13 +193,26 @@ function pacific(now) {
 // how big each game is. Card pages without their own listings show these as "More from <set>".
 const LIST_SKIP = /code card|jumbo|oversized|promo|pop series|trainer kit|miscellaneous|blister|world collection|burger king|mcdonald|professor program|first partner|prize pack|league|deck|art series|tins?$|collection$/i;
 const LIST_SHARE = { 3: 0.38, 68: 0.14, 1: 0.10, 71: 0.07, 2: 0.07, 89: 0.07, 85: 0.05 };
-function listPick(priceFiles, total = CFG.listTop) {
-  const cats = Object.keys(priceFiles);
+// Every game gets at least LIST_MIN items, so a card page always has a full row of 4 others to show; the extra slots come
+// out of the biggest game's share. A game raised to the minimum lists its sealed products first (its booster boxes).
+const LIST_MIN = 8, SEALED_HI = 1000, LIST_V = '/list4'; // LIST_V: bump to rebuild the watched list at once
+function listSlots(cats, total) {
   const known = cats.filter(c => LIST_SHARE[c]), rest = cats.filter(c => !LIST_SHARE[c]);
   const restShare = Math.max(0, 1 - known.reduce((a, c) => a + LIST_SHARE[c], 0));
+  const slots = {}, raised = new Set();
+  for (const c of cats) { slots[c] = Math.round(total * (LIST_SHARE[c] || (rest.length ? restShare / rest.length : 0))); if (slots[c] < LIST_MIN) { slots[c] = LIST_MIN; raised.add(c); } }
+  let over = Object.values(slots).reduce((a, b) => a + b, 0) - total;
+  const big = cats.filter(c => !raised.has(c)), pool = big.reduce((a, c) => a + slots[c], 0);
+  for (const c of big) { if (over <= 0 || !pool) break; slots[c] = Math.max(LIST_MIN, slots[c] - Math.round((slots[c] / pool) * over)); } // shared by the big games, by size
+  let left = Object.values(slots).reduce((a, b) => a + b, 0) - total;
+  while (left !== 0) { const c = big.slice().sort((a, b) => slots[b] - slots[a])[0]; if (!c) break; slots[c] -= Math.sign(left); left -= Math.sign(left); } // rounding
+  return { slots, raised };
+}
+function listPick(priceFiles, total = CFG.listTop) {
+  const cats = Object.keys(priceFiles), { slots: S, raised } = listSlots(cats, total);
   const out = [];
   for (const cat of cats) {
-    const pf = priceFiles[cat], slots = Math.round(total * (LIST_SHARE[cat] || (rest.length ? restShare / rest.length : 0)));
+    const pf = priceFiles[cat], slots = S[cat];
     if (!slots) continue;
     // a real release date is a plain day ("2026-11-06T00:00:00"); older sets carry the date TCGplayer last touched them
     const rel = g => /T00:00:00(\.0+)?$/.test(String(g.publishedOn || '')) ? String(g.publishedOn) : '';
@@ -207,8 +223,8 @@ function listPick(priceFiles, total = CFG.listTop) {
       const rows = list.map(p => ({ id: p[0], cat: +cat, g: g.groupId, kind: p[5] ? 'card' : 'sealed', name: p[1], number: p[5] ? p[2] || '' : '', set: g.name, market: mk(p[0]) })).filter(x => x.market);
       const cards = rows.filter(x => x.kind === 'card' && x.market >= CFG.listLo && x.market <= CFG.listHi).sort((a, b) => b.market - a.market).slice(0, CFG.perSetCards);
       // boxes, ETBs, bundles – not cases
-      const sealed = rows.filter(x => x.kind === 'sealed' && x.market >= CFG.minMarket && x.market <= 400 && !/\bcase\b/i.test(x.name)).sort((a, b) => b.market - a.market).slice(0, CFG.perSetSealed);
-      return cards.concat(sealed);
+      const sealed = rows.filter(x => x.kind === 'sealed' && x.market >= CFG.minMarket && x.market <= SEALED_HI && !/\bcase\b/i.test(x.name)).sort((a, b) => b.market - a.market).slice(0, CFG.perSetSealed);
+      return raised.has(cat) ? sealed.concat(cards) : cards.concat(sealed);
     });
     let taken = 0;
     for (const q of queues) { for (const x of q) { if (taken >= slots) break; out.push(x); taken++; } if (taken >= slots) break; } // newest set first, a handful from each
@@ -284,12 +300,12 @@ async function runDeals(env = {}) {
   const ixBuf = await gh.download('history', 'indexes.json.gz');
   const indexes = ixBuf ? JSON.parse(zlib.gunzipSync(ixBuf)) : null;
   if (!indexes) { log('no market indexes yet'); return { enabled: true, searched: 0 }; }
-  if (!st.items || st.itemsBuilt !== indexes.built + '/list2') {
+  if (!st.items || st.itemsBuilt !== indexes.built + LIST_V) {
     const priceFiles = {};
     for (const cat of Object.keys(indexes.cats || {})) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
     const deal = itemsFrom(indexes, priceFiles), pick = listPick(priceFiles), have = new Set(deal.map(x => x.id));
     st.listIds = pick.map(x => x.id);
-    st.items = deal.concat(pick.filter(x => !have.has(x.id))); st.itemsBuilt = indexes.built + '/list3';
+    st.items = deal.concat(pick.filter(x => !have.has(x.id))); st.itemsBuilt = indexes.built + LIST_V;
     st.setNames = {}; for (const [cat, pf] of Object.entries(priceFiles)) st.setNames[cat] = (pf.groups || []).map(g => g.name); // to spot a listing for another set
     log(`${st.items.length} items to watch`);
   }
@@ -337,5 +353,5 @@ async function runDeals(env = {}) {
   return { enabled: true, searched, deals: deals.length };
 }
 
-module.exports = { listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
+module.exports = { listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
 if (require.main === module) runDeals().catch(e => { console.error(e); process.exit(1); });
