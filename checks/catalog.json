@@ -1,9 +1,16 @@
 {
- "at": "2026-11-20T06:35:39.145Z",
+ "at": "2026-11-20T06:36:20.489Z",
  "token": {
   "status": 400,
   "error": "invalid_grant",
   "description": "the provided authorization refresh token is invalid or was issued to another client"
  },
- "results": []
+ "results": [],
+ "secret": {
+  "length": 2376,
+  "start": "v^1.1#",
+  "refreshMarker": false,
+  "hasSpaces": false
+ },
+ "asUserToken": 204
 }
