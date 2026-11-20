@@ -103,6 +103,8 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
     ok(rj({ name: 'Magikarp - 203/193', set: 'SV02: Paldea Evolved', number: '203/193' }, 'Magikarp 30th Celebrations Illustration Rare 203/193') === 'other set', 'a Celebration reprint is not the original');
     ok(rj({ kind: 'sealed', name: 'Two Legends - Booster Box', set: 'Two Legends', cat: 68 }, 'S-Chinese OPC-08 Booster Box One Piece TCG Two Legends') === 'language', 'S-Chinese is Chinese');
     ok(rj({ name: 'Gengar ex - 154/128', set: 'ME: 30th Celebration', number: '154/128' }, 'Gengar Ex 154/128 - 30th Celebrations | Pokémon Extended Artwork Display Case') === 'bad word', 'a display case is not the card');
+    ok(rj({ kind: 'sealed', name: 'One Piece Card Game Illustration Box Vol. 1', set: 'One Piece Promotion Cards', cat: 68 }, 'One Piece Card Game Illustration Box Volume 7 Rayleigh/Shakuyaku NEW SEALED') === 'edition', 'Illustration Box Vol. 7 is not Vol. 1');
+    ok(rj({ kind: 'sealed', name: 'Obsidian Flames Booster Box', set: 'SV03: Obsidian Flames' }, 'Pokemon Obsidian Flames Booster Box x2 Factory Sealed') === 'quantity' && rj({ kind: 'sealed', name: 'Obsidian Flames Booster Box', set: 'SV03: Obsidian Flames' }, '2X Obsidian Flames Booster Box Sealed') === 'quantity', 'two boxes in one listing are not one box');
     ok(rj({ kind: 'sealed', name: 'One Piece Tin Pack Set Vol. 2 Display', set: 'Tin Pack Set Vol. 2', cat: 68 }, 'One Piece Mini-tin Pack Set vol.3 [TS-03] Display box-12 Mini Tins NEW/SEALED') === 'edition', 'another volume is another product'); }
   ok(rj({ name: 'Jolteon', set: 'Pokemon Jungle', cat: 85 }, 'Pokémon Japanese Jolteon 299/SM-P Gym Promo NEAR MINT') === 'set', 'a card with no number needs its set named');
   ok(rj({ name: 'Jolteon', set: 'Pokemon Jungle', cat: 85 }, 'Jolteon Pokemon Jungle Japanese Holo') === '', 'a card with no number and its set named is fine');
@@ -239,7 +241,11 @@ const dealsRun = async () => {
   ok(await (async () => { const f2 = {}; const g2 = { download: async (t, n) => f2[t + '/' + n] || files[t + '/' + n] || null, put: async (t, n, b) => { f2[t + '/' + n] = b; } };
     await D.runDeals({ gh: g2, appId: 'a', certId: 'b', ebay: { search: async () => [lst('y1', 150, 'a'), lst('y2', 152, 'b'), lst('y3', 149, 'c'), lst('y4', 155, 'd')] }, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
     return JSON.parse(f2['prices/deals.json']).deals.length === 0; })(), 'deals: when all of eBay asks about the same, the market price is wrong – no deal');
-  const ebay = { search: async it => { searches++; return [lst('x1', 150, 'a'), lst('x2', 195, 'b'), lst('x3', 200, 'c'), lst('x4', 205, 'd')]; } };
+  ok(await (async () => { const f2 = {}; const g2 = { download: async (t, n) => f2[t + '/' + n] || files[t + '/' + n] || null, put: async (t, n, b) => { f2[t + '/' + n] = b; } };
+    await D.runDeals({ gh: g2, appId: 'a', certId: 'b', ebay: { search: async () => [lst('z1', 150, 'a'), lst('z2', 195, 'b'), lst('z3', 200, 'c'), lst('z4', 205, 'd')], look: async () => ({ c: 'Moderately played (Very good)', g: 0, e: '' }) }, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
+    return JSON.parse(f2['prices/deals.json']).deals.length === 0; })(), 'deals: a card the seller marks Moderately Played on eBay is no deal, whatever its title says');
+  ok(D.lookOk({}, { c: 'Near mint or better', g: 0, e: '5' }, ['7']) === 'other product' && D.lookOk({}, { c: 'Near mint or better', g: 0, e: '7' }, ['7']) === '' && D.lookOk({}, { c: '', g: 0, e: '' }, []) === 'no condition', 'deals: eBay catalog product must be the card\'s own; no Card Condition, no deal');
+  const ebay = { search: async it => { searches++; return [lst('x1', 150, 'a'), lst('x2', 195, 'b'), lst('x3', 200, 'c'), lst('x4', 205, 'd')]; }, look: async () => ({ c: 'Near mint or better', g: 0, e: '' }) };
   r = await D.runDeals({ gh, appId: 'a', certId: 'b', ebay, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });
   const out = JSON.parse(files['prices/deals.json']);
   ok(r.enabled && searches === 1 && out.deals.length === 1 && out.deals[0].pid === 10 && out.budget.used === 1, 'keys set: item searched once, deal published, budget counted');

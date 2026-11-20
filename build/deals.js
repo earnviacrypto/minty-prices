@@ -3,7 +3,8 @@
 // (EBAY_APP_ID, EBAY_CERT_ID; the EPN campaign defaults to 5339254309). Everyone's Minty reads the one file it
 // writes (prices/deals.json) – no copy of Minty ever searches eBay itself, so users never use up eBay searches.
 //
-// Budget: eBay allows 5,000 searches a day per app (reset at midnight Pacific). 4,500 are used, spread over the hours:
+// Budget: eBay allows 5,000 calls a day per app (reset at midnight Pacific). 3,800 searches, spread over the hours, and
+// up to 700 listing look-ups (a card deal's own Card Condition and eBay catalog product, each listing once):
 //  - items worth $200+ are searched every 6 hours, items worth $20–200 once a day, items under $20 never;
 //  - what is left of each hour's share rechecks items that have deals, so sold listings drop off sooner.
 // One search per item, asking eBay only for Buy It Now listings from US sellers priced 40–85% of market.
@@ -13,7 +14,7 @@ const { GitHub, sleep } = require('./gh');
 const DEALS_VERSION = 1;
 // listTop: the dearest items, searched every listEvery hours so their listings can be shown (eBay: listing information
 // shown may be at most 6 hours older than on eBay – `stale`); the rest once a day, for deals only.
-const CFG = { minPeers: 3, trust: 0.8, dayBudget: 4500, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.45, minFeedback: 98, minRatings: 50, keep: 300 };
+const CFG = { minPeers: 3, trust: 0.8, dayBudget: 3800, lookDay: 700, lookKeep: 14, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.45, minFeedback: 98, minRatings: 50, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
 const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor', 'display case', 'case for', 'extended art case', 'extended artwork', 'artwork case', 'magnetic', 'frame', 'unsealed'];
@@ -43,6 +44,8 @@ function rejectReason(it, l) {
   const foreignItem = it.cat === 85 || /japanese/i.test(it.set || '');
   if (!foreignItem && FOREIGN_WORDS.some(w => t.includes(' ' + w + ' ') || t.includes('-' + w + ' ') || t.includes(' ' + w + '-'))) return 'language'; // also "S-Chinese", "Chinese-Simplified"
   if (!foreignItem && +it.cat === 3 && (JP_SET.test(t) || t.includes(' pokemon card 151 '))) return 'language'; // a Japanese set code ("SV2a", "S12a", "SM11b") on an English card
+  if (it.kind === 'sealed' && l.conditionId && String(l.conditionId) !== '1000') return 'not new';
+  if (it.kind === 'sealed' && / ([2-9]|1\d) ?x | x ?([2-9]|1\d) /.test(t) && !/ ([2-9]|1\d) ?x | x ?([2-9]|1\d) /.test(norm(it.name))) return 'quantity'; // "2X …", "… x2": more than one
   if (it.kind !== 'sealed') {
     const tp = t.replace(/\//g, ' ');
     if (PLAYED.test(tp) || / [a-z]*played /.test(tp) || [...tp.matchAll(/ (\S+) hp /g)].some(m => !/^\d+$/.test(m[1]))) return 'played'; // the market price is for Near Mint ("HP" after a number is the card's hit points)
@@ -300,6 +303,27 @@ class Ebay {
     if (!r.ok) throw new Error('eBay search: ' + r.status + ' ' + (await r.text()).slice(0, 200));
     return (await r.json()).itemSummaries || [];
   }
+  // One listing's own details: the seller's Card Condition (eBay's fixed list – "Near mint or better", "Lightly played
+  // (Excellent)" …), whether it is graded, and the eBay catalog product it is attached to.
+  async look(lid) {
+    const headers = { authorization: 'Bearer ' + await this.auth(), 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' };
+    this.count++;
+    const r = await this.fetch('https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(lid), { headers });
+    if (r.status === 429) { const e = new Error('eBay daily limit reached'); e.limit = true; throw e; }
+    if (!r.ok) throw new Error('eBay item: ' + r.status);
+    const j = await r.json(), ds = j.conditionDescriptors || [];
+    const cc = ds.find(d => /card condition/i.test(d.name || '')), graded = ds.some(d => /grader|grade/i.test(d.name || '')) || j.conditionId === '2750';
+    return { c: cc && cc.values && cc.values[0] ? String(cc.values[0].content || '') : '', g: graded ? 1 : 0, e: j.epid ? String(j.epid) : '' };
+  }
+}
+// Is a looked-up card listing the item, in Near Mint? (Card Condition must be eBay's "Near mint or better"; a listing
+// attached to another eBay catalog product than the card's own is another card – a reprint, a jumbo, another edition.)
+function lookOk(it, k, epids) {
+  if (!k) return 'not checked';
+  if (k.g) return 'graded';
+  if (!/^near mint/i.test(k.c)) return k.c ? 'played' : 'no condition';
+  if (k.e && epids && epids.length && !epids.includes(k.e)) return 'other product';
+  return '';
 }
 
 // Biggest saving first; an eBay listing shows once (under the item it matches best), and one seller's identical listings once.
@@ -348,9 +372,13 @@ async function runDeals(env = {}) {
   LS = LS && LS.items ? LS : { v: 1, items: {} };
   useSetNames(st.setNames);
   const byId = new Map(st.items.map(it => [it.id, it]));
+  if (!st.budget.look) st.budget.look = 0;
+  st.look = st.look || {}; for (const [k, v] of Object.entries(st.look)) if (now - v.at > CFG.lookKeep * 86400000) delete st.look[k]; // a listing's condition, looked up once
+  let EP = {}; try { const b = await gh.download('prices', 'epid.json.gz'); if (b) EP = JSON.parse(zlib.gunzipSync(b)).items || {}; } catch (_) {}
+  const epidsOf = it => (EP[it.id] || []).map(x => String(x[0]));
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
-  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
+  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && (d.kind === 'sealed' || d.nm) && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
   const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
@@ -374,6 +402,14 @@ async function runDeals(env = {}) {
       const who = (l.seller || {}).username || '', same = norm(l.title) + '|' + d.total;
       if ((who && sellers.has(who)) || titles.has(same)) continue;
       if (who) sellers.add(who); titles.add(same); // used only here – no seller name is kept
+      if (it.kind !== 'sealed') { // a card: the seller's own Card Condition and eBay catalog product decide, not the title
+        let k = st.look[d.lid];
+        if (!k && st.budget.look < CFG.lookDay) {
+          try { k = Object.assign(await eb.look(l.itemId), { at: now }); st.look[d.lid] = k; st.budget.look++; } catch (e) { log('look', e.message); if (e.limit) break; }
+        }
+        if (lookOk(it, k, epidsOf(it))) continue;
+        d.nm = 1;
+      }
       if (old.has(d.lid)) d.found = old.get(d.lid).found; else if (firstSeen.has(d.lid)) d.found = firstSeen.get(d.lid);
       deals.push(d);
     }
@@ -391,5 +427,5 @@ async function runDeals(env = {}) {
   return { enabled: true, searched, deals: deals.length };
 }
 
-module.exports = { listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
+module.exports = { lookOk, listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
 if (require.main === module) runDeals().catch(e => { console.error(e); process.exit(1); });
