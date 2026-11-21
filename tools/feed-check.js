@@ -1,12 +1,11 @@
 // One-off: which news feeds answer, how often they post, and how many items are about trading card games.
 const FEEDS = {
-  'Bell of Lost Souls': 'https://www.belloflostsouls.net/feed', 'GeekDad': 'https://geekdad.com/feed/', 'Graphic Policy (TCG)': 'https://graphicpolicy.com/tag/tcg/feed/',
-  'Graphic Policy (card games)': 'https://graphicpolicy.com/category/games/card-games/feed/', 'Meeple Mountain': 'https://www.meeplemountain.com/feed/',
-  'TCG Rocks': 'https://tcgrocks.com/feed/', 'Bleeding Cool card games': 'https://bleedingcool.com/games/tabletop/card-games/feed/', 'ICv2': 'https://icv2.com/rss/news',
-  'ICv2 games': 'https://icv2.com/rss/games', 'Dot Esports TCG': 'https://dotesports.com/tcg/feed', 'Tabletop Gaming': 'https://www.tabletopgaming.co.uk/feed/',
-  'PokeBeach': 'https://www.pokebeach.com/feed', 'Dicebreaker': 'https://www.dicebreaker.com/feed', 'EN World': 'https://www.enworld.org/ewr-porta/index.rss',
-  'Polygon tabletop': 'https://www.polygon.com/rss/tabletop-games/index.xml', 'Card Gamer': 'https://cardgamer.com/feed/', 'Tabletop Gaming News': 'https://www.tabletopgamingnews.com/feed/',
-  'BoardGameWire': 'https://boardgamewire.com/index.php/feed/', 'Kicktraq hot': 'https://www.kicktraq.com/hot/rss/'
+  'Games Press news': 'https://www.gamespress.com/News/RSS', 'The Outer Haven TCG': 'https://www.theouterhaven.net/tag/tcg-news/feed/', 'CGMagazine TCG': 'https://www.cgmagonline.com/tag/trading-card-game/feed/',
+  'onepiece.gg': 'https://onepiece.gg/feed/', 'KitGuru TCG': 'https://www.kitguru.net/tag/trading-card-game/feed/', 'ICv2 a': 'https://icv2.com/rss', 'ICv2 b': 'https://icv2.com/articles/rss',
+  'ICv2 c': 'https://icv2.com/feeds/news', 'TCG Rocks b': 'https://tcgrocks.com/feed', 'Card Gamer': 'https://cardgamer.com/feed/', 'Bleeding Cool card games': 'https://bleedingcool.com/games/tabletop/card-games/feed/',
+  'Graphic Policy card games': 'https://graphicpolicy.com/category/games/card-games/feed/', 'Tabletop Gaming': 'https://www.tabletopgaming.co.uk/feed/', 'BoardGameWire': 'https://boardgamewire.com/index.php/feed/',
+  'Shonen TCG': 'https://www.shonentcg.com/blog-feed.xml', 'Comicbook tabletop': 'https://comicbook.com/gaming/feed/', 'Dicebreaker b': 'https://www.dicebreaker.com/feed/news',
+  'Bell of Lost Souls card games': 'https://www.belloflostsouls.net/category/card-games/feed', 'GeekDad crowdfunding': 'https://geekdad.com/tag/crowdfunding/feed/', 'GeekDad kickstarter': 'https://geekdad.com/category/gaming/kickstarter/feed/'
 };
 const TCG = /\b(tcg|trading card|card game|ccg|booster|starter deck)\b/i, CROWD = /\b(kickstarter|crowdfund|gamefound|backerkit|campaign|pledge)\b/i;
 const UA = { 'user-agent': 'MintyPrices/1.0 (+https://github.com/earnviacrypto/minty-prices)' };
