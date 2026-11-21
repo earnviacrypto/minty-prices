@@ -20,6 +20,11 @@ Prices: TCGplayer market prices via TCGCSV. Nothing here is estimated.
 |---|---|---|
 | `prices` | `categories.json` | TCGplayer's list of games (categories) |
 | `prices` | `prices-<category>.json.gz` | a TCGplayer category (game): its sets, products and today's market prices |
+| `prices` | `releases.json` | sets coming out in the next 100 days and out in the last 14: dates (the makers' own where they publish them), products, one trusted eBay link each |
+| `prices` | `news.json` | card-game headlines from news sites, last 30 days: headline, date, link and site only |
+| `prices` | `deals.json`, `listings.json.gz` | eBay deals and listings (eBay API), at most 6 hours old |
+| `prices` | `graded.json.gz`, `epid.json.gz` | graded prices of cards in use, eBay catalog numbers |
+| `prices` | `rates.json.gz`, `grading.json` | exchange rates; grading companies' services and fees |
 | `history` | `index.json` | which history file holds each set, and the dates covered |
 | `history` | `h-<category>-<n>.json.gz` | daily market price history of a bunch of sets |
 | `state` | | the job's own working copy — not for the app |
