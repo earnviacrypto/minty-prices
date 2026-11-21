@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: node tools/rel-check.js
+      - run: node tools/rel-check.js "[[1,24947],[2,24822]]" && 7z a -bd rel-img.7z img >/dev/null
       - name: Publish
         env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
-        run: gh release upload checks rel-check.json --clobber
+        run: gh release upload checks rel-check.json rel-img.7z --clobber
