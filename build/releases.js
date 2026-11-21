@@ -16,7 +16,7 @@ const SKIP_ITEM = /\bcase\b|code card|sleeve|playmat|binder|deck box|storage|por
 const KINDS = [['etb', /elite trainer box/i], ['half', /half booster box/i], ['side', /build (&|and) battle|scene box|starter deck display/i], ['box', /booster box|\bdisplay\b|\bbox\b/i], ['bundle', /bundle/i], ['kit', /kit\b/i], ['deck', /deck/i], ['pack', /\bpacks?\b/i], ['other', /./]];
 const RANK = ['box', 'etb', 'bundle', 'half', 'kit', 'deck', 'side', 'pack', 'other'];
 const kindOf = n => KINDS.find(k => k[1].test(n))[0];
-const BAD = /\b(proxy|custom|orica|replica|fake|empty|opened|resealed|damaged|lot|you pick|mystery|repack|art card|sticker|playmat|sleeves?|binder|display case|case only|box only|psa|bgs|cgc|graded|japanese|japan|jp|jpn|korean|chinese|german|french|italian|spanish|portuguese|thai|indonesian)\b/i;
+const BAD = /\b(proxy|custom|orica|replica|fake|empty|opened|resealed|damaged|lot|you pick|mystery|repack|art card|sticker|playmat|sleeves?|binder|display case|case only|box only|psa|bgs|cgc|graded|japanese|japan|jp|jpn|korean|chinese|german|french|italian|spanish|portuguese|thai|indonesian|eu|european|eu print)\b/i;
 const OTHER_KIND = [/\bdecks?\b/, /\bbundle\b/, /\bkit\b/, /\belite trainer\b|\betb\b/, /\bstarter\b/, /\bchampion\b/, /\bcollection\b/, /\bcollector\b/, /\bplay booster\b/, /\bdraft\b/, /\bhalf\b/, /\bbuild (and )?battle\b/, /\btins?\b/, /\bblister\b/];
 const KIND_WORD = { box: /\b(box|display)\b/i, half: /\bhalf\b/i, side: /\b(box|display)\b/i, etb: /\b(elite trainer|etb)\b/i, bundle: /\bbundle\b/i, kit: /\bkit\b/i, deck: /\bdeck\b/i, pack: /\bpacks?\b/i, other: /./ };
 

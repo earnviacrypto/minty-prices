@@ -54,6 +54,7 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(!R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box Case 6 boxes', 900)) && !R.linkOk(r, it, L('Pokemon Flowing Fists Japanese Booster Box', 175)) && !R.linkOk(r, it, L('Pokemon Flowing Fists Booster Pack', 175)), 'releases: case, Japanese or another product: no link');
   ok(!R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box', 450)), 'releases: far above the pre-order price: no link');
   const lg = { cat: 89, set: 'Legacy', items: [] }, lgi = { name: 'Legacy - Booster Display', k: 'box', price: 149 };
+  ok(!R.linkOk(lg, lgi, L('Riftbound Legacy EU Booster Display', 150)), 'releases: EU print not linked');
   ok(!R.linkOk(lg, lgi, L('Riftbound TCG: Legacy Champion Deck Display - 4 Unique Decks - Presale', 99.95)) && R.linkOk(lg, lgi, L('Riftbound Legacy Booster Display 24 packs presale', 159)), 'releases: a deck display is not the booster display');
   const st = { cat: 1, set: 'Star Trek', items: [] }, sti = { name: 'Star Trek - Collector Booster Display', k: 'box', price: 380 };
   ok(R.linkOk(st, sti, L('Star Trek Collector Booster Box MTG New Sealed', 389)) && !R.linkOk(st, { name: 'Star Trek - Play Booster Display', k: 'box', price: 380 }, L('Star Trek Collector Booster Box MTG New Sealed', 389)), 'releases: collector box only for the collector display');
