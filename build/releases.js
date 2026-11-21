@@ -83,7 +83,7 @@ async function runReleases(env = {}) {
   const appId = env.appId ?? process.env.EBAY_APP_ID, certId = env.certId ?? process.env.EBAY_CERT_ID, campaign = env.campaign ?? (process.env.EBAY_CAMPAIGN_ID || '5339254309');
   const now = env.now || Date.now();
   let prev = null; try { const b = await gh.download('prices', 'releases.json'); prev = b ? JSON.parse(b) : null; } catch (_) {}
-  if (prev && prev.v === RELEASES_VERSION && now - Date.parse(prev.updated) < CFG.every * 3600000) { log('up to date'); return { skipped: true }; }
+  if (!(env.force ?? process.env.RELEASES_FORCE) && prev && prev.v === RELEASES_VERSION && now - Date.parse(prev.updated) < CFG.every * 3600000) { log('up to date'); return { skipped: true }; }
   const priceFiles = {};
   for (const cat of GAMES) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
   const sets = pickSets(priceFiles, new Date(now).toISOString());
