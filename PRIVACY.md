@@ -1,6 +1,6 @@
 # Minty TCG Portfolio Tracker – Privacy Policy
 
-Effective: November 19, 2026
+Effective: November 21, 2026 (adds phone alerts and pictures)
 
 Minty TCG Portfolio Tracker ("Minty") is a free desktop app for keeping track of trading cards and sealed products. This policy explains what information Minty handles and what it does with it.
 
@@ -20,8 +20,13 @@ To show prices and pictures, Minty downloads public information from:
 
 - Minty's shared price copy on GitHub (earnviacrypto/minty-prices): daily market prices, price history, market indexes, graded prices, eBay deals and eBay listings.
 - Free public card databases and price lists.
+- Card and product pictures, from the sites that publish them.
 
 Like any website, these services can see your computer's internet (IP) address when Minty downloads from them. Minty sends them nothing about you or your collection – only the name or number of the card or product being looked up.
+
+## Phone alerts (only if you turn them on)
+
+Phone alerts are off until you set them up. If you turn them on, Minty sends each alert's text – for example a card's name and its new price – to the free ntfy service (ntfy.sh, or the server you choose), which passes it to the ntfy app on your phone. Anyone who knows your topic name can read those alerts, so pick a name nobody would guess. Nothing else from your collection is sent. Turning phone alerts off stops it.
 
 ## eBay listings and deals
 
