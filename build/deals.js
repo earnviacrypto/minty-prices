@@ -4,7 +4,8 @@
 // writes (prices/deals.json) – no copy of Minty ever searches eBay itself, so users never use up eBay searches.
 //
 // Budget: eBay allows 5,000 calls a day per app (reset at midnight Pacific). 3,800 searches, spread over the hours, and
-// up to 700 listing look-ups (a card deal's own Card Condition and eBay catalog product, each listing once):
+// up to 700 listing look-ups (a card deal's own Card Condition and eBay catalog product, a sealed deal's description – no opened box,
+// no missing packs – each listing once):
 //  - items worth $200+ are searched every 6 hours, items worth $20–200 once a day, items under $20 never;
 //  - what is left of each hour's share rechecks items that have deals, so sold listings drop off sooner.
 // One search per item, asking eBay only for Buy It Now listings from US sellers priced 40–85% of market.
@@ -17,7 +18,7 @@ const DEALS_VERSION = 1;
 const CFG = { minPeers: 3, trust: 0.8, dayBudget: 3800, lookDay: 700, lookKeep: 14, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.45, minFeedback: 99, minRatings: 100, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
-const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor', 'display case', 'case for', 'extended art case', 'extended artwork', 'artwork case', 'magnetic', 'frame', 'unsealed', 'non-tcg', 'non tcg', 'not tcg', 'metal diamond', 'daway'];
+const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor', 'display case', 'case for', 'extended art case', 'extended artwork', 'artwork case', 'magnetic', 'frame', 'unsealed', 'non-tcg', 'non tcg', 'not tcg', 'metal diamond', 'daway', 'open box', 'no shrink', 'without shrink', 'unwrapped', 'packs only', 'loose packs', 'partial box'];
 const GRADED_WORDS = ['psa', 'bgs', 'cgc', 'tag', 'sgc', 'beckett', 'graded', 'gem mint', 'slab', 'slabbed', 'pcg'];
 const FOREIGN_WORDS = ['japanese', 'japan', 'jp', 'jpn', 'jap', 'korean', 'chinese', 'german', 'french', 'italian', 'spanish', 'portuguese', 'thai', 'indonesian'];
 
@@ -59,6 +60,11 @@ function rejectReason(it, l) {
     if (forms.length && !forms.some(f => t.includes(' ' + f + ' ') || t.includes(' ' + f.replace(/\//g, ' / ') + ' ') || t.includes('#' + f))) return 'number';
   } else {
     if (/\bcase\b/i.test(it.name) !== /\bcase\b/.test(t)) return 'case';
+    { // a box with packs taken out: "26 Sealed Packs" on a 36-pack booster box
+      const n = [...t.matchAll(/ (\d{1,3}) (?:sealed )?(?:booster )?packs? /g)].map(m => +m[1]).filter(x => x >= 2);
+      if (it.packs && n.some(x => x < it.packs)) return 'partial';
+      if (!it.packs && / sealed packs /.test(t) && !/ factory sealed /.test(t)) return 'partial'; // "sealed packs" and not a sealed box: the box was opened
+    }
     if (GRADED_WORDS.some(w => t.includes(' ' + w + ' ')) || /\bgraded\b|\bgm\b|\bmt ?10\b|gem mt/.test(t)) return 'graded'; // a slab promo listed under the box
   }
   const need = words(it.kind === 'sealed' ? it.name : baseName(it.name));
@@ -333,8 +339,25 @@ class Ebay {
     if (!r.ok) throw new Error('eBay item: ' + r.status);
     const j = await r.json(), ds = j.conditionDescriptors || [];
     const cc = ds.find(d => /card condition/i.test(d.name || '')), graded = ds.some(d => /grader|grade/i.test(d.name || '')) || j.conditionId === '2750';
-    return { c: cc && cc.values && cc.values[0] ? String(cc.values[0].content || '') : '', g: graded ? 1 : 0, e: j.epid ? String(j.epid) : '' };
+    const text = (String(j.shortDescription || '') + ' ' + String(j.description || '')).replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+    return { c: cc && cc.values && cc.values[0] ? String(cc.values[0].content || '') : '', g: graded ? 1 : 0, e: j.epid ? String(j.epid) : '', o: OPENED.test(text) ? 1 : 0, n: packCounts(text) };
   }
+}
+// A sealed listing's own description: does the seller say the box was opened, or how many packs are in it?
+const OPENED = /\b(box (has been|was|is) opened|opened (the |this )?(box|display|package)|open(ed)? box|no shrink ?-?wrap|without (the |its )?(shrink|plastic|cellophane)|shrink ?-?wrap (was |has been )?(removed|missing|torn|ripped|opened)|not (factory )?sealed|unsealed|re-?sealed|unwrapped|packs only|loose packs|packs (were |have been )?(removed|taken out|pulled)|missing \d+ packs?|\d+ packs? (missing|removed|taken out|pulled)|partial box)\b/i;
+const packCounts = t => [...String(t).matchAll(/\b(\d{1,3}) (?:sealed |booster |unopened |\w+ ){0,3}packs?\b/gi)].map(m => +m[1]).filter(x => x >= 2 && x <= 60).slice(0, 8);
+// How many packs a sealed product holds, from TCGplayer's own product text ("Each booster box contains 36 packs", "30 … Booster Packs")
+function packsIn(text) {
+  const t = String(text || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&');
+  const m = t.match(/\b(?:box|display)[^.\n]{0,40}?\b(?:contains?|includes?|holds?|has)\s+(\d{1,3})\s+(?:[\w:'’.-]+\s+){0,6}?(?:booster\s+)?packs\b/i)
+    || t.match(/^[\s•·*-]*(\d{1,3})\s+(?:[\w:'’.-]+\s+){0,6}?booster packs\b/im);
+  return m ? +m[1] : 0;
+}
+function lookOkSealed(it, k) {
+  if (!k) return 'not checked';
+  if (k.o) return 'opened';
+  if (it.packs && (k.n || []).some(x => x < it.packs)) return 'partial';
+  return '';
 }
 // Is a looked-up card listing the item, in Near Mint? (Card Condition must be eBay's "Near mint or better"; a listing
 // attached to another eBay catalog product than the card's own is another card – a reprint, a jumbo, another edition.)
@@ -398,10 +421,25 @@ async function runDeals(env = {}) {
   const epidsOf = it => (EP[it.id] || []).map(x => String(x[0]));
   const fresh = t => now - Date.parse(t) < CFG.stale * 3600000; // eBay: shown listing information at most 6 h old
   const firstSeen = new Map(deals.map(d => [d.lid, d.found])); // a listing seen before keeps its found time
-  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && (d.kind === 'sealed' || d.nm) && (d.kind !== 'sealed' || /^(new|ungraded)/i.test(d.cond || '')) && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
+  deals = deals.filter(d => byId.has(d.pid) && fresh(d.checked) && d.peerMid && (d.kind === 'sealed' ? d.sv : d.nm) && (d.kind !== 'sealed' || /^(new|ungraded)/i.test(d.cond || '')) && d.peerMid >= d.market * CFG.trust && d.total >= d.market * (1 - CFG.maxOff) && !rejectReason(byId.get(d.pid), { title: d.title })); // deals from before the eBay-price check are dropped until their item is searched again // deals kept from before pass today's checks too
   const todo = plan(st.items, st, deals, now, allowance, st.listIds ? new Set(st.listIds) : null);
   const eb = env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log });
   let searched = 0, lastError = null;
+  // pack counts of the sealed products about to be searched (from TCGplayer's product text, read once a month per set)
+  st.packs = st.packs || {}; st.packsAt = st.packsAt || {};
+  const ua = { 'user-agent': 'MintyPrices/1.0 (+https://github.com/earnviacrypto/minty-prices)' };
+  let packReads = 0;
+  for (const it of todo) {
+    if (it.kind !== 'sealed' || !it.g) continue;
+    if (!(st.packsAt[it.g] && now - st.packsAt[it.g] < 30 * 86400000) && packReads < 40) {
+      packReads++;
+      try {
+        const r = await fetchFn(`https://tcgcsv.com/tcgplayer/${it.cat}/${it.g}/products`, { headers: ua });
+        if (r.ok) { for (const x of ((await r.json()).results || [])) { const d = (x.extendedData || []).find(e => /description|oracletext|cardtext/i.test(e.name)); const n = d ? packsIn(d.value) : 0; if (n) st.packs[x.productId] = n; else delete st.packs[x.productId]; } st.packsAt[it.g] = now; }
+      } catch (e) { log('packs', e.message); }
+    }
+    if (st.packs[it.id]) it.packs = st.packs[it.id];
+  }
   for (const it of todo) {
     let list;
     try { list = await eb.search(it); } catch (e) { log(it.name, e.message); lastError = e.message.slice(0, 300); if (e.limit || /sign-in/.test(e.message)) break; continue; } // a failed sign-in fails every search: stop
@@ -429,6 +467,13 @@ async function runDeals(env = {}) {
         }
         if (lookOk(it, k, epidsOf(it))) continue;
         d.nm = 1; d.cc = k.c; // the seller's Card Condition, shown on the deal
+      } else { // sealed: the seller's own description must not say the box was opened or that packs are missing
+        let k = st.look[d.lid];
+        if (!k && st.budget.look < CFG.lookDay) {
+          try { k = Object.assign(await eb.look(l.itemId), { at: now }); st.look[d.lid] = k; st.budget.look++; } catch (e) { log('look', e.message); if (e.limit) break; }
+        }
+        if (lookOkSealed(it, k)) continue;
+        d.sv = 1; // checked: description read, nothing about an opened box or missing packs
       }
       if (old.has(d.lid)) d.found = old.get(d.lid).found; else if (firstSeen.has(d.lid)) d.found = firstSeen.get(d.lid);
       deals.push(d);
@@ -447,5 +492,5 @@ async function runDeals(env = {}) {
   return { enabled: true, searched, deals: deals.length };
 }
 
-module.exports = { sealedCard, lookOk, listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
+module.exports = { packsIn, packCounts, lookOkSealed, sealedCard, lookOk, listSlots, listPick, runDeals, cleanDeals, useSetNames, setPhrase, variantWords, sealedTypes, setWords, buildQuery, rejectReason, dealFrom, listingFrom, itemsFrom, plan, pacific, numForms, CFG, Ebay };
 if (require.main === module) runDeals().catch(e => { console.error(e); process.exit(1); });

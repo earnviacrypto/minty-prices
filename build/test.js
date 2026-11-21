@@ -81,6 +81,20 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(R.linkOk(ja, jit, L('Pokemon Japanese Something New Booster Box sealed', 70)) && !R.linkOk(ja, jit, L('Pokemon Something New Booster Box', 70)), 'releases: Japanese sets link only to listings that say Japanese');
 }
 
+// ---- sealed: opened boxes and missing packs ----
+{
+  const D = require('./deals');
+  const box = { id: 501257, kind: 'sealed', cat: 3, name: 'Obsidian Flames Booster Box', set: 'SV03: Obsidian Flames', market: 381, yr: 2023, packs: 36 };
+  const L2 = (title, extra = {}) => Object.assign({ title, price: { value: '270.99', currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, condition: 'New/Factory Sealed', seller: { feedbackPercentage: '99.9', feedbackScore: 1030 } }, extra);
+  ok(D.rejectReason(box, L2('Pokémon TCG Scarlet & Violet - Obsidian Flames Booster Box - 26 Sealed Packs')) === 'partial', 'sealed: "26 Sealed Packs" on a 36-pack box is a box with packs taken out');
+  ok(D.rejectReason(Object.assign({}, box, { packs: 0 }), L2('Pokémon TCG Scarlet & Violet - Obsidian Flames Booster Box - 26 Sealed Packs')) === 'partial', 'sealed: "sealed packs" without "factory sealed" when the pack count is unknown');
+  ok(D.rejectReason(box, L2('Pokemon Obsidian Flames Booster Box 36 Packs Factory Sealed')) === '', 'sealed: a full 36-pack factory sealed box passes');
+  ok(D.rejectReason(box, L2('Pokemon Obsidian Flames Booster Box open box all packs sealed')) !== '', 'sealed: "open box" thrown out');
+  ok(D.packsIn('Each booster box contains 36 packs.') === 36 && D.packsIn('Contents:<br>• 30 Nauctis: The Sunken Realm Booster Packs<br>• 1 Box Topper') === 30 && D.packsIn('Each pack contains 10 cards.') === 0, 'sealed: pack count read from the product text');
+  ok(D.lookOkSealed(box, { o: 1, n: [] }) === 'opened' && D.lookOkSealed(box, { o: 0, n: [26] }) === 'partial' && D.lookOkSealed(box, { o: 0, n: [36] }) === '' && D.lookOkSealed(box, null) === 'not checked', 'sealed: the seller\'s description decides – opened, packs missing, or fine');
+  ok(D.packCounts('Box was opened to pull 10 packs. 26 sealed packs remain.').includes(26), 'sealed: pack counts found in a description');
+}
+
 // ---- news ----
 {
   const N = require('./news');
