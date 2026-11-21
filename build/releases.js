@@ -1,6 +1,7 @@
 // Releases: sets coming out in the next 100 days and sets out in the last 14, for Minty's front page.
 // From the TCGplayer price lists: each set's release date and its main sealed products with their (pre-order) prices.
-// For each set one eBay link – only to a listing from a Top Rated seller with 99.7%+ positive feedback and 500+ ratings.
+// For each set one eBay link – only to a seller with 99.7%+ positive feedback and 500+ ratings. (eBay's Top Rated badge is
+// not asked for: it goes on listings that ship within a day, so pre-orders almost never carry it.)
 // Run after the deals; it does its work at most every 6 hours (eBay listing details are shown at most 6 hours old).
 const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
@@ -54,13 +55,12 @@ function queryOf(r, it) {
   const has = mustWords(r).every(w => (' ' + prod.toLowerCase() + ' ').includes(w));
   return `${GAME_WORD[r.cat]} ${has ? '' : bareSet(r.set).replace(/:/g, '') + ' '}${prod}`.replace(/\s+/g, ' ').trim();
 }
-// Is this eBay listing one we may link to? Top Rated seller, 99.7%+, 500+ ratings, US, Buy It Now, the right product.
+// Is this eBay listing one we may link to? Seller at 99.7%+, 500+ ratings, US, Buy It Now, the right product.
 function linkOk(rel, item, l) {
   if (!l || !l.price || l.price.currency !== 'USD') return false;
   if (!(l.buyingOptions || []).includes('FIXED_PRICE')) return false;
   if (l.itemLocation && l.itemLocation.country && l.itemLocation.country !== 'US') return false;
   const s = l.seller || {};
-  if (l.topRatedBuyingExperience !== true) return false;
   if (!(parseFloat(s.feedbackPercentage) >= CFG.minFeedback) || !(s.feedbackScore >= CFG.minRatings)) return false;
   if (!/^new/i.test(l.condition || 'new')) return false;
   const t = ' ' + String(l.title || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ') + ' ';
@@ -102,9 +102,9 @@ async function runReleases(env = {}) {
       if (!env.fast) await sleep(250);
     }
   }
-  const out = { v: RELEASES_VERSION, updated: new Date(now).toISOString(), bar: { pct: CFG.minFeedback, ratings: CFG.minRatings, topRated: true }, sets };
+  const out = { v: RELEASES_VERSION, updated: new Date(now).toISOString(), bar: { pct: CFG.minFeedback, ratings: CFG.minRatings, topRated: false }, sets };
   await gh.put('prices', 'releases.json', Buffer.from(JSON.stringify(out)));
-  log(`${sets.length} sets, ${searched} eBay searches, ${sets.filter(r => r.link).length} with a trusted seller link`);
+  log(`${sets.length} sets, ${searched} eBay searches, ${sets.filter(r => r.link).length} with a seller link`);
   return { sets: sets.length, searched };
 }
 
