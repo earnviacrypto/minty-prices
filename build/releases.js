@@ -17,6 +17,7 @@ const KINDS = [['etb', /elite trainer box/i], ['half', /half booster box/i], ['s
 const RANK = ['box', 'etb', 'bundle', 'half', 'kit', 'deck', 'side', 'pack', 'other'];
 const kindOf = n => KINDS.find(k => k[1].test(n))[0];
 const BAD = /\b(proxy|custom|orica|replica|fake|empty|opened|resealed|damaged|lot|you pick|mystery|repack|art card|sticker|playmat|sleeves?|binder|display case|case only|box only|psa|bgs|cgc|graded|japanese|japan|jp|jpn|korean|chinese|german|french|italian|spanish|portuguese|thai|indonesian)\b/i;
+const OTHER_KIND = [/\bdecks?\b/, /\bbundle\b/, /\bkit\b/, /\belite trainer\b|\betb\b/, /\bstarter\b/, /\bchampion\b/, /\bcollection\b/, /\bcollector\b/, /\bplay booster\b/, /\bdraft\b/, /\bhalf\b/, /\bbuild (and )?battle\b/, /\btins?\b/, /\bblister\b/];
 const KIND_WORD = { box: /\b(box|display)\b/i, half: /\bhalf\b/i, side: /\b(box|display)\b/i, etb: /\b(elite trainer|etb)\b/i, bundle: /\bbundle\b/i, kit: /\bkit\b/i, deck: /\bdeck\b/i, pack: /\bpacks?\b/i, other: /./ };
 
 // a set's real release date (TCGplayer gives a plain day; older sets carry the date it last touched them)
@@ -71,6 +72,8 @@ function linkOk(rel, item, l) {
   if (/\bcase\b/.test(t)) return false;
   if (!mustWords(rel).every(w => t.includes(' ' + w.replace(/[^a-z0-9 ]+/g, ' ').trim() + ' '))) return false;
   if (!KIND_WORD[item.k].test(t)) return false;
+  const other = OTHER_KIND.filter(re => re.test(t) && !re.test(' ' + item.name.toLowerCase() + ' '));
+  if (other.length) return false; // a deck display is not a booster display, a bundle not a box
   const p = parseFloat(l.price.value);
   if (item.price && !(p >= item.price * 0.6 && p <= item.price * 2.5)) return false; // far off the pre-order price: another product or a scalper
   return true;
