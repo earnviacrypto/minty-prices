@@ -2,12 +2,14 @@
 // From the TCGplayer price lists: each set's release date and its main sealed products with their (pre-order) prices.
 // For each set one eBay link – only to a seller with 99.7%+ positive feedback and 500+ ratings. (eBay's Top Rated badge is
 // not asked for: it goes on listings that ship within a day, so pre-orders almost never carry it.)
+// Each set also carries what its pop-up in Minty shows (info): one line about the set, every product with what is inside
+// (copied from the product details), the set size when stated, and the cards revealed so far, priciest first.
 // Run after the deals; it does its work at most every 6 hours (eBay listing details are shown at most 6 hours old).
 const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
 const { Ebay, setWords } = require('./deals');
 
-const RELEASES_VERSION = 1;
+const RELEASES_VERSION = 2;
 const GAMES = [3, 85, 68, 89, 92, 86, 2, 1]; // the games Minty shows on the front page
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 68: 'One Piece', 85: 'Pokemon Japanese', 86: 'Gundam', 89: 'Riftbound', 92: 'Cyberpunk' };
 const CFG = { ahead: 100, back: 14, perSet: 3, every: 6, minFeedback: 99.7, minRatings: 500, tryItems: 2 };
@@ -79,6 +81,51 @@ function linkOk(rel, item, l) {
   return true;
 }
 
+// ---- what the pop-up shows: from TCGplayer's own product details (the maker's text, copied, never written by us) ----
+const plain = t => String(t || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\r/g, '').replace(/[ \t]+/g, ' ');
+const textOf = x => { const e = {}; for (const d of x.extendedData || []) e[d.name] = d.value; return plain(e.Description || e.OracleText || e.CardText || ''); };
+const sentences = t => t.split(/\n+/).flatMap(l => l.split(/(?<=[.!?])\s+(?=[A-Z"“])/)).map(x => x.trim()).filter(x => x.length > 2);
+const clip = (t, n) => t.length <= n ? t : t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…';
+// one line about the set: the "More about <set>" paragraph when there is one, else the text's first sentence
+function aboutOf(texts) {
+  for (const t of texts) { const m = t.match(/More about [^\n]+\n+([^\n]+)/); if (m && sentences(m[1])[0]) return clip(sentences(m[1])[0], 220); }
+  for (const t of texts) { const f = sentences(t)[0]; if (f && f.length > 30) return clip(f, 220); }
+  return '';
+}
+// bullet lines ("• 30 Booster Packs") right after the line at index i
+function bulletsAfter(lines, i) { const out = []; for (let j = i + 1; j < lines.length; j++) { const l = lines[j].trim(); if (!l) continue; if (!/^[•·\-*]/.test(l)) break; out.push(l.replace(/^[•·\-*]\s*/, '')); } return out; }
+// what's inside one product: its "Contents:" list; else a "… contains 7 cards:" line with its list; else sentences giving a count
+function insideOf(t) {
+  const lines = t.split('\n');
+  let i = lines.findIndex(l => /^\s*(pack |bundle |box |display |kit |deck )?contents:\s*$/i.test(l));
+  if (i >= 0) { const b = bulletsAfter(lines, i); if (b.length) return b.slice(0, 6).map(x => clip(x, 90)); }
+  i = lines.findIndex(l => /\b(contains?|includes?)\b.*\d.*:\s*$/i.test(l));
+  if (i >= 0) { const b = bulletsAfter(lines, i); const h = lines[i].trim().replace(/:\s*$/, ''); return [clip(h, 90)].concat(b.slice(0, 4).map(x => clip(x, 90))); }
+  const own = t.split(/More about /)[0];
+  const pick = sentences(own).filter(x => /\b(contains?|includes?|inside each|you'll get)\b/i.test(x) && /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b/i.test(x));
+  return pick.slice(0, 3).map(x => clip(x, 140));
+}
+const CASE = /\bcase\b|master case/i;
+const baseCard = n => String(n).replace(/\s*\([^)]*\)/g, '').replace(/\s+-\s+.*$/, '').trim();
+function detailsOf(r, products, pf) {
+  const pr = ((pf && pf.prices) || {})[r.g] || {};
+  const priceOf = id => { const v = Object.values(pr[id] || {}).filter(p => p > 0); return v.length ? Math.min(...v) : null; };
+  const isCard = x => (x.extendedData || []).some(e => e.name === 'Number');
+  const sealed = products.filter(x => !isCard(x) && !CASE.test(x.name) && !SKIP_ITEM.test(x.name)), cards = products.filter(isCard);
+  const texts = sealed.map(textOf).filter(Boolean);
+  const rank = x => RANK.indexOf(kindOf(x.name));
+  const prods = sealed.map(x => ({ id: x.productId, name: x.name, price: priceOf(x.productId), img: x.imageUrl || '', inc: insideOf(textOf(x)) }))
+    .sort((a, b) => rank(a) - rank(b) || (b.price || 0) - (a.price || 0)).slice(0, 8);
+  const seen = new Map();
+  for (const c of cards) { const k = baseCard(c.name), p = priceOf(c.productId) || 0; const o = seen.get(k); if (!o || p > o.price) seen.set(k, { id: c.productId, name: k, price: p || null, img: c.imageUrl || '' }); }
+  const top = [...seen.values()].sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 6);
+  // set size only when stated: the maker's "60-card … set", or Pokémon-style numbers "001/198"
+  let size = null;
+  for (const t of texts) { const m = t.match(/\b(\d{2,3})-card\b[^.]{0,40}\bset\b/i); if (m) { size = +m[1]; break; } }
+  if (!size) { const d = cards.map(c => ((c.extendedData || []).find(e => e.name === 'Number') || {}).value || '').map(v => (String(v).match(/^\D*\d+\s*\/\s*(\d+)$/) || [])[1]).filter(Boolean); if (d.length >= 3) { const f = {}; d.forEach(x => f[x] = (f[x] || 0) + 1); size = +Object.entries(f).sort((a, b) => b[1] - a[1])[0][0]; } }
+  return { about: aboutOf(texts), size, revealed: seen.size, products: prods, cards: top };
+}
+
 async function runReleases(env = {}) {
   const log = env.log || ((...a) => console.log(new Date().toISOString().slice(11, 19), 'releases:', ...a));
   const fetchFn = env.fetch || fetch;
@@ -90,6 +137,14 @@ async function runReleases(env = {}) {
   const priceFiles = {};
   for (const cat of GAMES) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
   const sets = pickSets(priceFiles, new Date(now).toISOString());
+  const ua = env.ua || 'MintyPrices/1.0 (+https://github.com/earnviacrypto/minty-prices)';
+  for (const r of sets) { // the set's product details, for the pop-up
+    try {
+      const res = await fetchFn(`https://tcgcsv.com/tcgplayer/${r.cat}/${r.g}/products`, { headers: { 'user-agent': ua } });
+      if (res.ok) r.info = detailsOf(r, ((await res.json()).results) || [], priceFiles[r.cat]);
+    } catch (e) { log(r.set, 'details', e.message); }
+    if (!env.fast) await sleep(150);
+  }
   const eb = appId && certId ? (env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log })) : null;
   let searched = 0;
   for (const r of sets) {
@@ -111,5 +166,5 @@ async function runReleases(env = {}) {
   return { sets: sets.length, searched };
 }
 
-module.exports = { runReleases, pickSets, linkOk, queryOf, kindOf, CFG, RELEASES_VERSION };
+module.exports = { detailsOf, insideOf, aboutOf, runReleases, pickSets, linkOk, queryOf, kindOf, CFG, RELEASES_VERSION };
 if (require.main === module) runReleases().catch(e => { console.error(e); process.exit(1); });
