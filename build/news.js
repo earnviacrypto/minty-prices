@@ -3,7 +3,7 @@
 // Runs with the Releases step (every 6 hours) and publishes prices/news.json (the last 30 days, newest first).
 const { GitHub, sleep } = require('./gh');
 
-const NEWS_VERSION = 1;
+const NEWS_VERSION = 2;
 const UA = 'MintyPrices/1.0 (+https://github.com/earnviacrypto/minty-prices)';
 // all: the feed is only about card games, so every item counts
 const FEEDS = [
