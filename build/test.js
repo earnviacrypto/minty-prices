@@ -36,6 +36,27 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(G.due({ v: V - 1, updated: '2026-11-18T11:05:00Z' }, at('2026-11-18T20:00:00Z')), 'a new reader runs at once, not tomorrow');
 }
 
+// ---- releases ----
+{
+  const R = require('./releases');
+  const pf = { 3: { groups: [{ groupId: 1, name: 'ME07: Flowing Fists', publishedOn: '2027-02-06T00:00:00' }, { groupId: 2, name: 'Old Set', publishedOn: '2026-01-01T00:00:00' }, { groupId: 3, name: 'ME: Promos', publishedOn: '2026-12-01T00:00:00' }, { groupId: 4, name: 'Box Toppers', publishedOn: '2026-12-01T00:00:00' }, { groupId: 5, name: 'Touched Set', publishedOn: '2026-11-25T14:02:11.13' }],
+    products: { 1: [[10, 'Flowing Fists Booster Pack', '', '', '', 0], [11, 'Flowing Fists Booster Box', '', '', '', 0], [12, 'Flowing Fists Booster Box Case', '', '', '', 0], [13, 'Flowing Fists Build & Battle Box', '', '', '', 0], [14, 'Pikachu ex', '001/100', 'R', '', 1], [15, 'Flowing Fists Elite Trainer Box', '', '', '', 0]], 2: [[20, 'Old Box', '', '', '', 0]], 3: [[30, 'Promo Box', '', '', '', 0]], 4: [[40, 'Topper card', '1', 'R', '', 1]], 5: [[50, 'Touched Box', '', '', '', 0]] },
+    prices: { 1: { 11: { Normal: 160 }, 15: { Normal: 60 } } } } };
+  const sets = R.pickSets(pf, '2026-11-20T12:00:00Z');
+  ok(sets.length === 1 && sets[0].set === 'ME07: Flowing Fists' && sets[0].date === '2027-02-06', 'releases: only sets with a real date in the window; promo, card-only and old sets left out');
+  ok(sets[0].items.map(i => i.id).join() === '11,15,13' && sets[0].items[0].price === 160, 'releases: box first, then ETB; no cases, no single cards, at most 3');
+  ok(R.queryOf(sets[0], sets[0].items[0]) === 'Pokemon Flowing Fists Booster Box', 'releases: eBay search is game, set and product');
+  const r = sets[0], it = r.items[0];
+  const L = (title, price, extra = {}) => Object.assign({ title, price: { value: String(price), currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, topRatedBuyingExperience: true, condition: 'New', seller: { feedbackPercentage: '99.8', feedbackScore: 2400 } }, extra);
+  ok(R.linkOk(r, it, L('Pokemon TCG Flowing Fists Booster Box 36 Packs PRE-ORDER', 175)), 'releases: Top Rated seller, 99.8%, right box: linked');
+  ok(!R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box', 175, { topRatedBuyingExperience: false })), 'releases: not Top Rated: no link');
+  ok(!R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box', 175, { seller: { feedbackPercentage: '99.6', feedbackScore: 9000 } })) && !R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box', 175, { seller: { feedbackPercentage: '100.0', feedbackScore: 499 } })), 'releases: under 99.7% or under 500 ratings: no link');
+  ok(!R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box Case 6 boxes', 900)) && !R.linkOk(r, it, L('Pokemon Flowing Fists Japanese Booster Box', 175)) && !R.linkOk(r, it, L('Pokemon Flowing Fists Booster Pack', 175)), 'releases: case, Japanese or another product: no link');
+  ok(!R.linkOk(r, it, L('Pokemon Flowing Fists Booster Box', 450)), 'releases: far above the pre-order price: no link');
+  const ja = { cat: 85, set: 'M5: Something New', items: [] }, jit = { name: 'Something New Booster Box', k: 'box', price: 60 };
+  ok(R.linkOk(ja, jit, L('Pokemon Japanese Something New Booster Box sealed', 70)) && !R.linkOk(ja, jit, L('Pokemon Something New Booster Box', 70)), 'releases: Japanese sets link only to listings that say Japanese');
+}
+
 // ---- market indexes ----
 {
   const { categoryIndexes, sizeFor } = require('./indexes');
@@ -76,7 +97,8 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(!D.dealFrom(card, L('Umbreon VMAX 214/203 Evolving Skies', 1149.99), now), 'wrong card number thrown out');
   ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 500), now), 'more than 60% under: too good to be true');
   ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 1500), now), 'less than 15% under: not a deal');
-  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 1149.99, { seller: { feedbackPercentage: '95.0', feedbackScore: 900 } }), now), 'seller under 98% feedback thrown out');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 1149.99, { seller: { feedbackPercentage: '95.0', feedbackScore: 900 } }), now), 'seller under 99% feedback thrown out');
+  ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies', 1149.99, { seller: { feedbackPercentage: '100.0', feedbackScore: 99 } }), now), 'seller with under 100 ratings thrown out');
   ok(!D.dealFrom(card, L('Umbreon VMAX 215/203 Evolving Skies Japanese', 1149.99), now), 'foreign listing for an English card thrown out');
   const box = { id: 2, cat: 89, g: 7, kind: 'sealed', name: 'Origins - Booster Display', number: '', set: 'Origins', market: 268.92 };
   ok(!!D.dealFrom(box, L('Riftbound Origins Booster Display 24 packs sealed', 199.99), now) && !D.dealFrom(box, L('Riftbound Origins Booster Display Case', 199.99), now), 'sealed: a case is not a box');
@@ -240,7 +262,7 @@ const dealsRun = async () => {
   files['history/indexes.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ built: 'b1', cats: { 3: { cards: { ids: [10] } } } })));
   files['prices/prices-3.json.gz'] = zlib.gzipSync(Buffer.from(JSON.stringify({ groups: [{ groupId: 5, name: 'Evolving Skies' }], products: { 5: [[10, 'Umbreon VMAX (Alternate Art Secret)', '215/203', 'R', '', 1]] }, prices: { 5: { 10: { Holofoil: 200 } } } })));
   let searches = 0;
-  const lst = (id, price, who) => ({ itemId: id, title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: String(price), currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: who, feedbackPercentage: '100', feedbackScore: 99 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/' + id });
+  const lst = (id, price, who) => ({ itemId: id, title: 'Pokemon Umbreon VMAX 215/203 Alt Art', price: { value: String(price), currency: 'USD' }, buyingOptions: ['FIXED_PRICE'], itemLocation: { country: 'US' }, seller: { username: who, feedbackPercentage: '100', feedbackScore: 120 }, shippingOptions: [{ shippingCost: { value: '0' } }], itemWebUrl: 'https://www.ebay.com/itm/' + id });
   // other sellers ask $195–$205: the $150 one stands out. When every listing asks about $150, none is a deal.
   ok(await (async () => { const f2 = {}; const g2 = { download: async (t, n) => f2[t + '/' + n] || files[t + '/' + n] || null, put: async (t, n, b) => { f2[t + '/' + n] = b; } };
     await D.runDeals({ gh: g2, appId: 'a', certId: 'b', ebay: { search: async () => [lst('y1', 150, 'a'), lst('y2', 152, 'b'), lst('y3', 149, 'c'), lst('y4', 155, 'd')] }, fast: true, log: () => {}, now: Date.parse('2026-11-18T12:00:00Z') });

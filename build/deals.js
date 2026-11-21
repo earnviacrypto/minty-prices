@@ -14,7 +14,7 @@ const { GitHub, sleep } = require('./gh');
 const DEALS_VERSION = 1;
 // listTop: the dearest items, searched every listEvery hours so their listings can be shown (eBay: listing information
 // shown may be at most 6 hours older than on eBay – `stale`); the rest once a day, for deals only.
-const CFG = { minPeers: 3, trust: 0.8, dayBudget: 3800, lookDay: 700, lookKeep: 14, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.45, minFeedback: 98, minRatings: 50, keep: 300 };
+const CFG = { minPeers: 3, trust: 0.8, dayBudget: 3800, lookDay: 700, lookKeep: 14, minMarket: 20, listTop: 650, listLo: 5, listHi: 250, perSetCards: 4, perSetSealed: 2, listEvery: 5, keepListings: 8, stale: 6, lowEvery: 24, recheckAfter: 2, minOff: 0.15, maxOff: 0.45, minFeedback: 99, minRatings: 100, keep: 300 };
 // Search word for each TCGplayer category (how eBay sellers write the game).
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 16: 'Vanguard', 17: 'Force of Will', 20: 'Weiss Schwarz', 24: 'Final Fantasy TCG', 25: 'UniVersus', 27: 'Dragon Ball Super', 57: 'Transformers TCG', 62: 'Flesh and Blood', 63: 'Digimon', 66: 'MetaZoo', 67: 'Wixoss', 68: 'One Piece', 71: 'Lorcana', 72: 'Battle Spirits', 73: 'Shadowverse', 74: 'Grand Archive', 77: 'Sorcery', 79: 'Star Wars Unlimited', 80: 'Dragon Ball Fusion World', 81: 'Union Arena', 83: 'Elestrals', 85: 'Pokemon Japanese', 86: 'Gundam', 87: 'hololive', 89: 'Riftbound', 91: 'Palworld', 92: 'Cyberpunk' };
 const BAD_WORDS = ['proxy', 'custom', 'orica', 'replica', 'fan art', 'fanart', 'digital', 'code card', 'online code', 'lot', 'you pick', 'pick your', 'choose', 'mystery', 'repack', 'reprint', 'fake', 'not real', 'damaged', 'read description', 'see description', 'empty', 'opened', 'resealed', 'no packs', 'art card', 'sticker', 'playmat', 'sleeve', 'binder', 'display only', 'torn', 'ripped', 'rip tear', 'crushed', 'dented', 'dent', 'water damage', 'poster only', 'box only', 'case only', 'empty box', 'no cards', 'mapped', 'weighed', 'read details', 'protector', 'protectors', 'dmg', 'heavily played', 'poor', 'display case', 'case for', 'extended art case', 'extended artwork', 'artwork case', 'magnetic', 'frame', 'unsealed', 'non-tcg', 'non tcg', 'not tcg', 'metal diamond', 'daway'];
@@ -304,6 +304,17 @@ class Ebay {
     const lo = Math.floor(it.market * (1 - CFG.maxOff) * 100) / 100;
     const filter = `buyingOptions:{FIXED_PRICE},itemLocationCountry:US,deliveryCountry:US,priceCurrency:USD,price:[${lo}..]`;
     const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search?' + new URLSearchParams({ q: buildQuery(it), filter, limit: '50', sort: 'price' });
+    const headers = { authorization: 'Bearer ' + await this.auth(), 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' };
+    if (this.campaign) headers['X-EBAY-C-ENDUSERCTX'] = `affiliateCampaignId=${this.campaign},affiliateReferenceId=minty`;
+    this.count++;
+    const r = await this.fetch(url, { headers });
+    if (r.status === 429) { const e = new Error('eBay daily limit reached'); e.limit = true; throw e; }
+    if (!r.ok) throw new Error('eBay search: ' + r.status + ' ' + (await r.text()).slice(0, 200));
+    return (await r.json()).itemSummaries || [];
+  }
+  // A plain search (the Releases list): Buy It Now, US sellers, newest products – the caller picks the listing.
+  async find(q) {
+    const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search?' + new URLSearchParams({ q, filter: 'buyingOptions:{FIXED_PRICE},itemLocationCountry:US,deliveryCountry:US,priceCurrency:USD', limit: '50' });
     const headers = { authorization: 'Bearer ' + await this.auth(), 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' };
     if (this.campaign) headers['X-EBAY-C-ENDUSERCTX'] = `affiliateCampaignId=${this.campaign},affiliateReferenceId=minty`;
     this.count++;
