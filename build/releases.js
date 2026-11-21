@@ -203,6 +203,26 @@ async function runReleases(env = {}) {
     sets.push(...extra); sets.sort((a, b) => a.date.localeCompare(b.date) || a.cat - b.cat);
     log(`makers: ${mk.length} products, ${sets.filter(r => r.maker).length} sets dated by the maker, ${extra.length} not on TCGplayer yet`);
   } catch (e) { log('makers', e.message); }
+  // Pictures: TCGplayer lists new products before it has their pictures (its picture server answers 403). Each picture is
+  // checked once a run; a missing one is replaced by the maker's own picture of that product when there is one, else left
+  // out (Minty shows its "No picture yet" mark). It comes back by itself once TCGplayer has it.
+  try {
+    const seen = new Map(); let dead = 0, swapped = 0;
+    const alive = async u => {
+      if (!/^https:\/\/tcgplayer-cdn\.tcgplayer\.com\//.test(u)) return true; // only TCGplayer's addresses can be missing
+      if (seen.has(u)) return seen.get(u);
+      let ok = true;
+      try { const r = await fetchFn(u, { method: 'HEAD', headers: { 'user-agent': ua } }); ok = r.ok || r.status === 405; } catch (_) { ok = true; } // a network error is not a missing picture
+      seen.set(u, ok); if (!env.fast) await sleep(60); return ok;
+    };
+    for (const r of sets) {
+      const info = r.info; if (!info) continue;
+      for (const p of info.products || []) if (p.img && !(await alive(p.img))) { dead++; p.img = p.mimg || ''; if (p.img) swapped++; }
+      for (const c of info.cards || []) if (c.img && !(await alive(c.img))) { dead++; c.img = ''; }
+      for (const p of info.products || []) delete p.mimg;
+    }
+    log(`pictures: ${seen.size} checked, ${dead} not on TCGplayer yet, ${swapped} replaced by the maker's picture`);
+  } catch (e) { log('pictures', e.message); }
   const eb = appId && certId ? (env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log })) : null;
   let searched = 0;
   const old = new Map(((prev && prev.v === RELEASES_VERSION && prev.sets) || []).map(x => [x.cat + '|' + x.g, x]));

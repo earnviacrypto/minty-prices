@@ -156,7 +156,8 @@ function mergeMakers(sets, list, games = {}) {
     for (const p of info.products) {
       const k = prodKind(p.name), from = mk.find(x => x.inc.length && x.kind === k) || (k === 'pack' ? null : null);
       if ((!p.inc || !p.inc.length) && from) p.inc = from.inc.slice(); // the maker's contents where TCGplayer gives none
-      if (!p.img) { const pic = mk.find(x => x.img && x.kind === k) || mk.find(x => x.img); if (pic) p.img = pic.img; }
+      const pic = mk.find(x => x.img && x.kind === k) || mk.find(x => x.img);
+      if (pic) { if (!p.img) p.img = pic.img; else p.mimg = pic.img; } // mimg: the maker's picture, used if TCGplayer's turns out to be missing
     }
   }
   // announced by the maker, not on TCGplayer yet: a set of its own (no price yet – prices come only from the market)
