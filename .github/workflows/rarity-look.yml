@@ -1,0 +1,18 @@
+# One-off: card scans per Pokémon rarity. Results in the "checks" release (rarity-look.tgz).
+name: Rarity look
+on:
+  push:
+    paths: ['tools/rarity-look.js', '.github/workflows/rarity-look.yml']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/rarity-look.js
+      - name: Publish
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: tar czf rarity-look.tgz rar && gh release upload checks rarity-look.tgz --clobber
