@@ -8,7 +8,7 @@ const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
 
 const V = 1;
-const CAT = { pokemon: 3, magic: 1, lorcana: 71, swu: 79, riftbound: 89, fab: 62 };
+const CAT = { pokemon: 3, magic: 1, lorcana: 71, swu: 79, riftbound: 89, fab: 62, sorcery: 77, digimon: 63, grandarchive: 74 };
 const UA = 'minty-prices (github.com/earnviacrypto/minty-prices)';
 const clean = a => String(a || '').replace(/\s+/g, ' ').trim();
 const ids = v => (Array.isArray(v) ? v : [v]).map(x => parseInt(x, 10)).filter(x => x > 0);
@@ -114,6 +114,69 @@ async function fab(fetchFn) {
   return out;
 }
 
+// ---- games whose card database has the artist but not TCGplayer's id: matched to TCGplayer's own card list ----
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+async function tcgCards(fetchFn, cat) { // [{ id, name, number, set }] – TCGplayer's cards of one game
+  const gs = ((await getJson(fetchFn, 'https://tcgcsv.com/tcgplayer/' + cat + '/groups')) || {}).results || [];
+  const out = [];
+  for (const g of gs) {
+    const ps = ((await getJson(fetchFn, 'https://tcgcsv.com/tcgplayer/' + cat + '/' + g.groupId + '/products')) || {}).results || [];
+    for (const p of ps) { const ext = Object.fromEntries((p.extendedData || []).map(e => [e.name, e.value])); if (ext.Rarity === undefined && ext.Number === undefined) continue; out.push({ id: p.productId, name: p.name, number: ext.Number || '', set: g.name }); }
+    await sleep(110);
+  }
+  return out;
+}
+// Sorcery: the official card list – each printing's set and artist. TCGplayer names the card the same way, set by set.
+async function sorcery(fetchFn) {
+  const cards = await getJson(fetchFn, 'https://api.sorcerytcg.com/api/cards');
+  const by = new Map(); // "set|name" → artists
+  for (const c of cards || []) for (const pr of c.printings || []) { const a = clean(pr.meta && pr.meta.artist && pr.meta.artist.name); if (!a || !pr.set) continue; const k = norm(pr.set.name) + '|' + norm(c.name); if (!by.has(k)) by.set(k, new Set()); by.get(k).add(a); }
+  const out = [];
+  for (const t of await tcgCards(fetchFn, CAT.sorcery)) {
+    const base = t.name.replace(/\s*\((?:foil|rainbow foil|curio|preconstructed|.*?)\)\s*$/i, '');
+    const set = norm(t.set.replace(/\s*\(.*\)$/, ''));
+    const hit = [...by.keys()].find(k => k === set + '|' + norm(base)) || [...by.keys()].find(k => k.endsWith('|' + norm(base)) && (set.includes(k.split('|')[0]) || k.split('|')[0].includes(set)));
+    const as = hit && by.get(hit);
+    if (as && as.size === 1) out.push([t.id, [...as][0]]); // one artist for that card in that set – never a guess between two
+  }
+  return out;
+}
+// Digimon: digimoncard.io – the artist of each card number's regular art. Alternate arts (TCGplayer names them with
+// a bracket) can have another artist, so they are left without one rather than given the wrong name.
+async function digimon(fetchFn) {
+  const list = await getJson(fetchFn, 'https://digimoncard.io/api-public/getAllCards?sort=name&series=Digimon%20Card%20Game');
+  const nums = [...new Set((list || []).map(c => c.cardnumber || c.id).filter(Boolean))];
+  const by = new Map();
+  await pool(nums, 4, async n => { try { const j = await getJson(fetchFn, 'https://digimoncard.io/api-public/search?card=' + encodeURIComponent(n), 1); for (const c of j || []) { const a = clean(c.artist); if (a && c.id === n && !by.has(n)) by.set(n, { a, name: norm(c.name) }); } } catch (_) {} });
+  const out = [];
+  for (const t of await tcgCards(fetchFn, CAT.digimon)) {
+    const num = String(t.number).trim().toUpperCase(), hit = by.get(num);
+    if (!hit) continue;
+    const plain = norm(t.name.replace(/\s+-\s+[A-Z0-9-]+$/i, ''));
+    if (plain === hit.name) out.push([t.id, hit.a]); // the plain print only – "(Alternate Art)" and the like are skipped
+  }
+  return out;
+}
+// Grand Archive: the official card database – each edition's set and illustrator.
+async function grandarchive(fetchFn) {
+  const by = new Map();
+  for (let page = 1; page < 400; page++) {
+    const j = await getJson(fetchFn, 'https://api.gatcg.com/cards/search?page=' + page + '&page_size=50', 1);
+    const data = (j && j.data) || [];
+    for (const c of data) for (const e of c.editions || []) { const a = clean(e.illustrator); const set = e.set && e.set.name; if (!a || !set) continue; const k = norm(set) + '|' + norm(c.name); if (!by.has(k)) by.set(k, new Set()); by.get(k).add(a); }
+    if (!data.length || (j.has_more === false) || (j.total_pages && page >= j.total_pages)) break;
+    await sleep(150);
+  }
+  const out = [];
+  for (const t of await tcgCards(fetchFn, CAT.grandarchive)) {
+    const base = norm(t.name.replace(/\s*\(.*?\)\s*$/, '')), set = norm(t.set.replace(/\s*\(.*\)$/, ''));
+    const k = [...by.keys()].find(x => x === set + '|' + base) || [...by.keys()].find(x => x.endsWith('|' + base) && (set.includes(x.split('|')[0]) || x.split('|')[0].includes(set)));
+    const as = k && by.get(k);
+    if (as && as.size === 1) out.push([t.id, [...as][0]]);
+  }
+  return out;
+}
+
 async function main(env = {}) {
   const log = env.log || ((...a) => console.log(new Date().toISOString().slice(11, 19), ...a));
   const fetchFn = env.fetch || fetch;
@@ -122,7 +185,7 @@ async function main(env = {}) {
   let state = {}; try { const b = await gh.download('state', 'artists-state.json.gz'); if (b) state = JSON.parse(zlib.gunzipSync(b)); } catch (_) {}
   let prev = null; try { const b = await gh.download('prices', 'artists.json.gz'); if (b) prev = JSON.parse(zlib.gunzipSync(b)); } catch (_) {}
   const groups = {}; try { const r = await getJson(fetchFn, 'https://tcgcsv.com/tcgplayer/' + CAT.swu + '/groups'); groups[CAT.swu] = (r && r.results) || []; } catch (_) {}
-  const readers = { pokemon, magic, lorcana, swu, riftbound, fab };
+  const readers = { pokemon, magic, lorcana, swu, riftbound, fab, sorcery, digimon, grandarchive };
   const names = [], nameIx = new Map(), cats = {}, report = {};
   const nameOf = a => { if (!nameIx.has(a)) { nameIx.set(a, names.length); names.push(a); } return nameIx.get(a); };
   for (const [game, cat] of Object.entries(CAT)) {
