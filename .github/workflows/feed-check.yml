@@ -1,0 +1,19 @@
+# One-off: which news feeds work for Releases news. Results in the "checks" release.
+name: Feed check
+on:
+  push:
+    paths: ['tools/feed-check.js', '.github/workflows/feed-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/feed-check.js
+      - name: Publish
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release upload checks feed-check.json --clobber
