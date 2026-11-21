@@ -8,7 +8,7 @@ const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
 
 const V = 1;
-const CAT = { pokemon: 3, magic: 1, lorcana: 71, swu: 79, riftbound: 89, fab: 62, sorcery: 77, digimon: 63, grandarchive: 74 };
+const CAT = { pokemon: 3, magic: 1, lorcana: 71, swu: 79, riftbound: 89, fab: 62, sorcery: 77, grandarchive: 74 };
 const UA = 'minty-prices (github.com/earnviacrypto/minty-prices)';
 const clean = a => String(a || '').replace(/\s+/g, ' ').trim();
 const ids = v => (Array.isArray(v) ? v : [v]).map(x => parseInt(x, 10)).filter(x => x > 0);
@@ -141,22 +141,6 @@ async function sorcery(fetchFn) {
   }
   return out;
 }
-// Digimon: digimoncard.io – the artist of each card number's regular art. Alternate arts (TCGplayer names them with
-// a bracket) can have another artist, so they are left without one rather than given the wrong name.
-async function digimon(fetchFn) {
-  const list = await getJson(fetchFn, 'https://digimoncard.io/api-public/getAllCards?sort=name&series=Digimon%20Card%20Game');
-  const nums = [...new Set((list || []).map(c => c.cardnumber || c.id).filter(Boolean))];
-  const by = new Map();
-  await pool(nums, 4, async n => { try { const j = await getJson(fetchFn, 'https://digimoncard.io/api-public/search?card=' + encodeURIComponent(n), 1); for (const c of j || []) { const a = clean(c.artist); if (a && c.id === n && !by.has(n)) by.set(n, { a, name: norm(c.name) }); } } catch (_) {} });
-  const out = [];
-  for (const t of await tcgCards(fetchFn, CAT.digimon)) {
-    const num = String(t.number).trim().toUpperCase(), hit = by.get(num);
-    if (!hit) continue;
-    const plain = norm(t.name.replace(/\s+-\s+[A-Z0-9-]+$/i, ''));
-    if (plain === hit.name) out.push([t.id, hit.a]); // the plain print only – "(Alternate Art)" and the like are skipped
-  }
-  return out;
-}
 // Grand Archive: the official card database – each edition's set and illustrator.
 async function grandarchive(fetchFn) {
   const by = new Map();
@@ -185,7 +169,7 @@ async function main(env = {}) {
   let state = {}; try { const b = await gh.download('state', 'artists-state.json.gz'); if (b) state = JSON.parse(zlib.gunzipSync(b)); } catch (_) {}
   let prev = null; try { const b = await gh.download('prices', 'artists.json.gz'); if (b) prev = JSON.parse(zlib.gunzipSync(b)); } catch (_) {}
   const groups = {}; try { const r = await getJson(fetchFn, 'https://tcgcsv.com/tcgplayer/' + CAT.swu + '/groups'); groups[CAT.swu] = (r && r.results) || []; } catch (_) {}
-  const readers = { pokemon, magic, lorcana, swu, riftbound, fab, sorcery, digimon, grandarchive };
+  const readers = { pokemon, magic, lorcana, swu, riftbound, fab, sorcery, grandarchive };
   const names = [], nameIx = new Map(), cats = {}, report = {};
   const nameOf = a => { if (!nameIx.has(a)) { nameIx.set(a, names.length); names.push(a); } return nameIx.get(a); };
   for (const [game, cat] of Object.entries(CAT)) {
