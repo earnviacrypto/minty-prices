@@ -167,7 +167,10 @@ function mergeMakers(sets, list, games = {}) {
     const bare = p.title.replace(/\[[^\]]*\]/g, '').replace(/^(digimon card game|union arena|dragon ball super card game( fusion world)?)\s*/i, '').trim();
     const inner = (bare.match(/\s-\s*([^-]+?)\s*-\s*$|-([^-]+)-\s*$/) || []).slice(1).find(Boolean);
     const name = tidy(bare.replace(/\s*-\s*([^-]+?)\s*-\s*$/, ' $1')).replace(/\s+/g, ' ').trim().replace(/^(premium extra booster|special booster pack|starter deck ex|starter deck|booster pack|extra booster|structure deck)\b/i, w => tidy(w.toUpperCase())); // "STARTER DECK -Baroque Works-" → "Starter Deck Baroque Works"
-    const set = (inner ? tidy(inner.trim()) : name.replace(/^(special booster pack|booster pack|starter deck( ex)?|extra booster|premium booster|digimon alysion)\s*/i, '').trim()) || name;
+    // the set's own name: a booster's or deck's title ("BOOSTER PACK -COME IN, WORLD-" → "Come In, World"); any other
+    // product keeps its full name ("Gift Collection ONE PIECE Heroines" – not mistaken for the Heroines booster)
+    const TYPE = /^(special booster pack|premium extra booster|booster pack|starter deck( ex)?|extra booster|premium booster|digimon alysion)\b/i;
+    const set = (TYPE.test(name) ? (inner ? tidy(inner.trim()) : name.replace(TYPE, '').replace(/^[\s:–-]+/, '').trim()) : name) || name;
     const g = 'm-' + (p.code || norm(p.title).slice(0, 24)), key = p.cat + '|' + g;
     if (byKey.has(key)) continue;
     const r = { cat: p.cat, set, g, mk: g, date: p.date, maker: { name: p.maker, u: p.url }, game: games[p.cat] || null,

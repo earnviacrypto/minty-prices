@@ -108,7 +108,8 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
     { cat: 81, code: 'UE27BT', title: 'Booster Pack Umamusume: Pretty Derby', date: '2027-02-12', kind: 'pack', inc: ['16 packs'], img: '', url: 'https://m/bt', maker: 'Bandai' },
     { cat: 63, code: 'ST-25', title: 'DIGIMON CARD GAME DIGIMON ALYSION Rubeusdramon [ST-25]', date: '2026-12-04', kind: 'deck', inc: ['Pre-Constructed Deck x1 (54 cards)'], img: '', url: 'https://m/st25', maker: 'Bandai' },
     { cat: 68, code: 'ST-38', title: 'STARTER DECK -Baroque Works- [ST-38]', date: '2026-12-18', kind: 'deck', inc: ['Constructed Deck x 1 (51 cards)'], img: 'https://m/st38.webp', url: 'https://m/st38', maker: 'Bandai' },
-    { cat: 68, code: '', title: 'OFFICIAL CARD SLEEVES 17', date: '2026-12-18', kind: 'other', inc: [], img: '', url: '', maker: 'Bandai' }];
+    { cat: 68, code: '', title: 'OFFICIAL CARD SLEEVES 17', date: '2026-12-18', kind: 'other', inc: [], img: '', url: '', maker: 'Bandai' },
+    { cat: 68, code: 'GC-2026', title: 'Gift Collection -ONE PIECE Heroines- [GC-2026]', date: '2026-11-20', kind: 'other', inc: [], img: '', url: '', maker: 'Bandai' }];
   const sets = [
     { cat: 80, set: 'Reach the God', g: 1, abbr: 'FB12', date: '2026-12-11', items: [], info: { products: [{ name: 'Reach the God Booster Box', inc: [], img: '' }, { name: 'Reach the God Booster Pack', inc: ['already here'], img: 'x' }] } },
     { cat: 81, set: 'UE27ST: Umamusume: Pretty Derby Starter Deck', g: 2, abbr: '', date: '2027-02-05', items: [{ name: 'Umamusume Starter Deck' }], info: { products: [] } },
@@ -117,6 +118,8 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(sets[0].date === '2026-12-18' && sets[0].tcgDate === '2026-12-11' && sets[0].mk === 'm-FB12' && sets[0].info.products[0].inc[0] === '1 Pack: 12 cards' && sets[0].info.products[0].img === 'https://m/fb12.png' && sets[0].info.products[1].inc[0] === 'already here' && sets[0].info.products[1].img === 'x' && sets[0].info.products[1].mimg === 'https://m/fb12.png', "makers: the maker's date wins; its contents and picture fill only empty products (its picture kept aside in case TCGplayer's is missing)");
   ok(sets[1].date === '2027-02-05' && sets[1].mk === 'm-UE27ST', 'makers: a starter deck set takes the deck page, not the booster with the same name');
   ok(sets[2].mk === 'm-ST-25' && sets[2].info.products[0].inc[0] === 'Pre-Constructed Deck x1 (54 cards)', 'makers: matched by name when the codes differ (BD01 / ST-25)');
+  ok(extra.length === 2 && extra.find(x => x.g === 'm-GC-2026').set === 'Gift Collection ONE PIECE Heroines', 'makers: a product that is not a booster or deck keeps its full name');
+  extra.splice(extra.findIndex(x => x.g === 'm-GC-2026'), 1);
   ok(extra.length === 1 && extra[0].set === 'Baroque Works' && extra[0].g === 'm-ST-38' && extra[0].game === 'One Piece Card Game' && extra[0].items[0].price === null && extra[0].info.products[0].name === 'Starter Deck Baroque Works' && extra[0].info.products[0].img === 'https://m/st38.webp', 'makers: announced but not on TCGplayer – its own set, no price; sleeves left out');
 }
 
