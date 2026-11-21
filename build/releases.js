@@ -82,7 +82,7 @@ function linkOk(rel, item, l) {
   if (other.length) return false; // a deck display is not a booster display, a bundle not a box
   const vol = String(rel.set).match(/\bvol(?:ume)?\.?\s*(\d+)/i); // Vol.2 is not Vol.1
   if (vol && !new RegExp(`\\bvol(ume)?\\.?\\s*${vol[1]}\\b`, 'i').test(l.title)) return false;
-  if (/\b[a-z]{1,4}\s?\d{2,3}\s*[-–&\/]\s*\d{2,3}\b/i.test(l.title) || /\s&\s.*\b(booster|box|display)\b.*\b(booster|box|display)\b/i.test(l.title)) return false; // two sets in one listing
+  if (!/\s&\s|combined/i.test(item.name) && /\b[a-z]{1,4}\s?\d{2,3}\s*[-–&\/]\s*\d{2,3}\b/i.test(l.title) || /\s&\s.*\b(booster|box|display)\b.*\b(booster|box|display)\b/i.test(l.title)) return false; // two sets in one listing
   const p = parseFloat(l.price.value);
   if (item.price && !(p >= item.price * 0.6 && p <= item.price * 2.5)) return false; // far off the pre-order price: another product or a scalper
   return true;
