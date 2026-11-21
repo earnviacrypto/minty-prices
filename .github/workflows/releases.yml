@@ -1,0 +1,25 @@
+name: Releases
+# Runs the Releases step on its own (the hourly Prices job also runs it): publishes prices/releases.json.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: releases
+  cancel-in-progress: false
+jobs:
+  releases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Releases
+        run: node build/releases.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+          EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
