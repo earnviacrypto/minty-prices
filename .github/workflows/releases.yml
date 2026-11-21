@@ -1,5 +1,5 @@
 name: Releases
-# Runs the Releases step on its own (the hourly Prices job also runs it): publishes prices/releases.json.
+# Runs the Releases and News steps on their own (the hourly Prices job also runs it): publishes prices/releases.json.
 on:
   workflow_dispatch:
 permissions:
@@ -24,3 +24,9 @@ jobs:
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
           EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
           RELEASES_FORCE: '1' # a run started by hand always does the work
+      - name: News
+        if: always()
+        run: node build/news.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_FORCE: '1'

@@ -71,6 +71,19 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(R.linkOk(ja, jit, L('Pokemon Japanese Something New Booster Box sealed', 70)) && !R.linkOk(ja, jit, L('Pokemon Something New Booster Box', 70)), 'releases: Japanese sets link only to listings that say Japanese');
 }
 
+// ---- news ----
+{
+  const N = require('./news');
+  const xml = `<rss><channel><item><title>Pok&#233;mon TCG: Mega Evolution&#8212;Flowing Fists Expansion Announced</title><link>https://ex.com/a</link><pubDate>Thu, 19 Nov 2026 10:00:00 +0000</pubDate><description><![CDATA[<p>Text</p>]]></description></item>
+  <item><title>Tax the Rich Game Review</title><link>https://ex.com/b</link><pubDate>Thu, 19 Nov 2026 10:00:00 +0000</pubDate><category>Board Games</category></item>
+  <item><title>New Kickstarter for Ignaris Trading Card Game goes live</title><link>https://ex.com/c</link><pubDate>Wed, 18 Nov 2026 10:00:00 +0000</pubDate></item></channel></rss>`;
+  const its = N.parseFeed(xml), f = { name: 'Test' };
+  ok(its.length === 3 && its[0].t.startsWith('Pokémon TCG: Mega Evolution—Flowing') && its[0].d === '2026-11-19T10:00:00.000Z', 'news: feed items read, HTML entities turned back into letters');
+  ok(N.keep(f, its[0]) && !N.keep(f, its[1]) && N.keep(f, its[2]), 'news: card game headlines kept, a board game review left out');
+  const a = N.itemOf(f, its[0]), c = N.itemOf(f, its[2]);
+  ok(a.game === 'pokemon' && !a.crowd && c.crowd === 1 && c.game === null, 'news: game and crowdfunding marked');
+}
+
 // ---- market indexes ----
 {
   const { categoryIndexes, sizeFor } = require('./indexes');
