@@ -50,18 +50,20 @@ async function pokemon(fetchFn, state, log, until) {
   for (const [a, pids] of Object.values(known)) if (a) for (const p of pids) out.push([p, a]);
   return out;
 }
-// Magic: Scryfall's daily file of every printing (artist + tcgplayer_id).
-async function magic(fetchFn, state, log) {
+// Magic: Scryfall's daily file of every printing (artist + tcgplayer_id), one card per line.
+async function magic(fetchFn) {
   const bulk = await getJson(fetchFn, 'https://api.scryfall.com/bulk-data');
   const d = (bulk && bulk.data || []).find(x => x.type === 'default_cards');
-  if (!d) throw new Error('Scryfall: no default_cards file');
-  const cards = await getJson(fetchFn, d.download_uri);
-  const out = [];
-  for (const c of cards || []) {
-    if (c.lang && c.lang !== 'en') continue;
-    const a = clean(c.artist); if (!a) continue;
-    for (const p of ids([c.tcgplayer_id, c.tcgplayer_etched_id].filter(Boolean))) out.push([p, a]);
-  }
+  const url = d && (d.jsonl_download_uri || d.download_uri);
+  if (!url) throw new Error('Scryfall: no default_cards file');
+  const r = await fetchFn(url, { headers: { 'user-agent': UA, accept: '*/*' } });
+  if (!r.ok) throw new Error('Scryfall file: ' + r.status);
+  let buf = Buffer.from(await r.arrayBuffer());
+  if (buf[0] === 0x1f && buf[1] === 0x8b) buf = zlib.gunzipSync(buf);
+  const text = buf.toString('utf8'), out = [];
+  const take = c => { if (c.lang && c.lang !== 'en') return; const a = clean(c.artist); if (a) for (const p of ids([c.tcgplayer_id, c.tcgplayer_etched_id].filter(Boolean))) out.push([p, a]); };
+  if (text.trimStart().startsWith('[')) JSON.parse(text).forEach(take);
+  else for (const line of text.split('\n')) { const l = line.trim().replace(/,$/, ''); if (l.startsWith('{')) { try { take(JSON.parse(l)); } catch (_) {} } }
   return out;
 }
 // Lorcana: Lorcast, set by set.
@@ -86,16 +88,11 @@ async function swu(fetchFn, state, log, until, groups) {
   }
   return out;
 }
-// Riftbound: Rifthunt (tcg_id = TCGplayer's product id).
+// Riftbound: Rifthunt's file of every card (tcgId = TCGplayer's product id).
 async function riftbound(fetchFn) {
+  const j = await getJson(fetchFn, 'https://api.rifthunt.com/bulk/cards');
   const out = [];
-  for (let page = 1; page < 200; page++) {
-    const j = await getJson(fetchFn, 'https://api.rifthunt.com/cards/search?q=*&page=' + page);
-    const list = (j && (j.data || j.results)) || [];
-    for (const c of list) { const a = clean(c.artist); if (a) for (const p of ids(c.tcg_id)) out.push([p, a]); }
-    if (!list.length || !(j && (j.has_more || j.next_page))) break;
-    await sleep(150);
-  }
+  for (const c of (j && j.cards) || []) { const a = clean(c.artist); if (a) for (const p of ids(c.tcgId || c.tcg_id)) out.push([p, a]); }
   return out;
 }
 // Flesh and Blood: the-fab-cube's open card list (every printing carries its artists and TCGplayer product id).
