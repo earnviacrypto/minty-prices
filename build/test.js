@@ -67,6 +67,12 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
     { productId: 3, name: 'Kraken (Showcase)', extendedData: [{ name: 'Number', value: '201/250' }] }, { productId: 4, name: 'Kraken', extendedData: [{ name: 'Number', value: '20/250' }] }, { productId: 5, name: 'Eel', extendedData: [{ name: 'Number', value: '21/250' }] }, { productId: 6, name: 'Crab', extendedData: [{ name: 'Number', value: '22/250' }] }];
   const det = R.detailsOf({ g: 9 }, prods, { prices: { 9: { 1: { Normal: 150 }, 3: { Foil: 40 }, 4: { Normal: 5 } } } });
   ok(det.products.length === 1 && det.products[0].price === 150 && det.revealed === 3 && det.cards[0].name === 'Kraken' && det.cards[0].price === 40 && det.size === 250, 'releases: details – cases left out, cards counted once per name (priciest printing), set size from "x/250"');
+  const cg = R.crowdGames([{ t: 'Ignaris Trading Card Game Launches on Kickstarter', u: 'https://ex.com/i', d: '2026-11-18T00:00:00Z', crowd: 1, src: 'X' },
+    { t: 'Cyberpunk TCG Announces Set 2 Called Edgerunners', u: 'https://ex.com/c', d: '2026-11-18T00:00:00Z', crowd: 1, src: 'X' },
+    { t: 'Old Game TCG on Kickstarter', u: 'https://ex.com/o', d: '2026-08-01T00:00:00Z', crowd: 1, src: 'X' },
+    { t: 'Pokémon TCG: Flowing Fists Announced', u: 'https://ex.com/p', d: '2026-11-18T00:00:00Z', crowd: 0, src: 'X' }], ['Cyberpunk TCG', 'Pokemon'], Date.parse('2026-11-21T00:00:00Z'));
+  ok(cg.length === 1 && cg[0].name === 'Ignaris' && cg[0].u === 'https://ex.com/i', 'releases: crowdfunded games from the news – new names only, games already listed and old news left out');
+  ok(R.gameWord({ cat: 77, game: 'Sorcery: Contested Realm' }) === 'Sorcery: Contested Realm' && R.gameWord({ cat: 90, game: 'CookieRun: Braverse TCG' }) === 'CookieRun: Braverse' && R.gameWord({ cat: 3 }) === 'Pokemon', 'releases: eBay search word for any game');
   const ja = { cat: 85, set: 'M5: Something New', items: [] }, jit = { name: 'Something New Booster Box', k: 'box', price: 60 };
   ok(R.linkOk(ja, jit, L('Pokemon Japanese Something New Booster Box sealed', 70)) && !R.linkOk(ja, jit, L('Pokemon Something New Booster Box', 70)), 'releases: Japanese sets link only to listings that say Japanese');
 }

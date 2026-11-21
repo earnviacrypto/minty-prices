@@ -1,4 +1,5 @@
-// Releases: sets coming out in the next 100 days and sets out in the last 14, for Minty's front page.
+// Releases: sets coming out in the next 100 days and sets out in the last 14, for Minty's front page – every card game TCGplayer
+// lists (Minty's own games from the shared price files, the rest read from TCGCSV), plus crowdfunded games named in the news.
 // From the TCGplayer price lists: each set's release date and its main sealed products with their (pre-order) prices.
 // For each set one eBay link – only to a seller with 99.7%+ positive feedback and 500+ ratings. (eBay's Top Rated badge is
 // not asked for: it goes on listings that ship within a day, so pre-orders almost never carry it.)
@@ -9,11 +10,12 @@ const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
 const { Ebay, setWords } = require('./deals');
 
-const RELEASES_VERSION = 2;
-const GAMES = [3, 85, 68, 89, 92, 86, 2, 1]; // the games Minty shows on the front page
+const RELEASES_VERSION = 3;
+const GAMES = [3, 85, 68, 89, 92, 86, 2, 1]; // Minty's own games: read from the shared price files
+const NOT_TCG = /supplies|accessor|comic|funko|board game|miniature|sports card|non-sport|video game/i; // TCGplayer categories that are not card games
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 68: 'One Piece', 85: 'Pokemon Japanese', 86: 'Gundam', 89: 'Riftbound', 92: 'Cyberpunk' };
 const CFG = { ahead: 100, back: 14, perSet: 3, every: 6, minFeedback: 99.7, minRatings: 500, tryItems: 2 };
-const SKIP_SET = /release event|box toppers|promo|miscellaneous|\bmisc\b|prize|jumbo|art series|code card|championship|league|oversized|world collection|black star|deck exclusives/i;
+const SKIP_SET = /release event|event cards|box toppers|promo|miscellaneous|\bmisc\b|prize|jumbo|art series|code card|championship|league|oversized|world collection|black star|deck exclusives/i;
 const SKIP_ITEM = /\bcase\b|code card|sleeve|playmat|binder|deck box|storage|portfolio|dice|token|\blot\b/i;
 const KINDS = [['etb', /elite trainer box/i], ['half', /half booster box/i], ['side', /build (&|and) battle|scene box|starter deck display/i], ['box', /booster box|\bdisplay\b|\bbox\b/i], ['bundle', /bundle/i], ['kit', /kit\b/i], ['deck', /deck/i], ['pack', /\bpacks?\b/i], ['other', /./]];
 const RANK = ['box', 'etb', 'bundle', 'half', 'kit', 'deck', 'side', 'pack', 'other'];
@@ -29,7 +31,7 @@ const dayNo = s => Math.round(Date.parse(s.slice(0, 10) + 'T00:00:00Z') / 864e5)
 // The sets to show, newest last: date window, no catch-all groups, up to 3 main sealed products each (boxes first).
 function pickSets(priceFiles, today) {
   const t = dayNo(today), out = [];
-  for (const cat of GAMES) {
+  for (const cat of Object.keys(priceFiles).map(Number)) {
     const pf = priceFiles[cat]; if (!pf) continue;
     for (const g of pf.groups || []) {
       const day = relDay(g); if (!day) continue;
@@ -48,6 +50,8 @@ function pickSets(priceFiles, today) {
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.cat - b.cat);
 }
 
+// The game's name for an eBay search: Minty's short names, else TCGplayer's name without "Trading Card Game" and the like
+const gameWord = r => GAME_WORD[r.cat] || String(r.game || '').replace(/\b(official card game|trading card game|card game|tcg)\b/ig, '').replace(/[:\s]+$/, '').trim();
 // The set's own name: no code ("ME06: "), no "Commander: ", no " - Retail"
 const bareSet = n => String(n).replace(/^commander:\s*/i, '').replace(/^[A-Za-z]{1,5}\d{0,3}[a-z]?:\s*/, '').replace(/\s*-\s*retail\b/i, '').trim();
 const PROD_WORDS = new Set(['starter', 'deck', 'decks', 'retail', 'display', 'bundle', 'kit', 'booster', 'box', 'pack', 'special', 'set']);
@@ -56,7 +60,7 @@ const mustWords = r => setWords(bareSet(r.set)).filter(w => !PROD_WORDS.has(w));
 function queryOf(r, it) {
   const prod = it.name.replace(/\[.*?\]|\(.*?\)/g, '').replace(/\s*-\s*retail\b/ig, '').replace(/\s+-\s+/g, ' ').replace(/:/g, '').replace(/\s+/g, ' ').trim();
   const has = mustWords(r).every(w => (' ' + prod.toLowerCase() + ' ').includes(w));
-  return `${GAME_WORD[r.cat]} ${has ? '' : bareSet(r.set).replace(/:/g, '') + ' '}${prod}`.replace(/\s+/g, ' ').trim();
+  return `${gameWord(r)} ${has ? '' : bareSet(r.set).replace(/:/g, '') + ' '}${prod}`.replace(/\s+/g, ' ').trim();
 }
 // Is this eBay listing one we may link to? Seller at 99.7%+, 500+ ratings, US, Buy It Now, the right product.
 function linkOk(rel, item, l) {
@@ -126,6 +130,22 @@ function detailsOf(r, products, pf) {
   return { about: aboutOf(texts), size, revealed: seen.size, products: prods, cards: top };
 }
 
+// Crowdfunded games from the news: a headline flagged as crowdfunding that names a "<Name> Trading Card Game / TCG / Card Game"
+// not on TCGplayer yet. No date is guessed: these show as "date not set" with a link to the article.
+const CROWD_NAME = /((?:[A-Z0-9][\w'’!&.-]*)(?:\s+(?:[A-Z0-9][\w'’!&.-]*|of|the|and|x)){0,4})\s+(?:Official\s+)?(?:Trading Card Game|TCG|Card Game)\b/;
+const normName = n => String(n).toLowerCase().replace(/\b(official|card game|trading card game|tcg)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function crowdGames(items, known, now) {
+  const seen = new Set(known.map(normName).filter(Boolean)), out = new Map();
+  for (const it of items) {
+    if (!it.crowd || !it.d || now - Date.parse(it.d) > 60 * 864e5) continue;
+    const m = String(it.t).match(CROWD_NAME); if (!m) continue;
+    const name = m[1].replace(/^(The|New|A|An)\s+/, '').replace(/(\s+(Trading|Official))+$/, '').trim(), k = normName(name);
+    if (!k || k.length < 3 || [...seen].some(s => s && (k === s || k.startsWith(s + ' ') || s.startsWith(k + ' ')))) continue;
+    if (!out.has(k)) out.set(k, { name, t: it.t, u: it.u, d: it.d, src: it.src });
+  }
+  return [...out.values()];
+}
+
 async function runReleases(env = {}) {
   const log = env.log || ((...a) => console.log(new Date().toISOString().slice(11, 19), 'releases:', ...a));
   const fetchFn = env.fetch || fetch;
@@ -134,21 +154,51 @@ async function runReleases(env = {}) {
   const now = env.now || Date.now();
   let prev = null; try { const b = await gh.download('prices', 'releases.json'); prev = b ? JSON.parse(b) : null; } catch (_) {}
   if (!(env.force ?? process.env.RELEASES_FORCE) && prev && prev.v === RELEASES_VERSION && now - Date.parse(prev.updated) < CFG.every * 3600000) { log('up to date'); return { skipped: true }; }
-  const priceFiles = {};
-  for (const cat of GAMES) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
-  const sets = pickSets(priceFiles, new Date(now).toISOString());
   const ua = env.ua || 'MintyPrices/1.0 (+https://github.com/earnviacrypto/minty-prices)';
+  const getJ = async u => { const r = await fetchFn(u, { headers: { 'user-agent': ua } }); if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); };
+  const priceFiles = {}, games = {}, raw = {};
+  for (const cat of GAMES) { const b = await gh.download('prices', `prices-${cat}.json.gz`); if (b) priceFiles[cat] = JSON.parse(zlib.gunzipSync(b)); }
+  // every other card game TCGplayer lists: its sets in the window, with their products and prices, read straight from TCGCSV
+  try {
+    const cats = (await getJ('https://tcgcsv.com/tcgplayer/categories')).results || [];
+    for (const c of cats) games[c.categoryId] = c.displayName || c.name;
+    const t = dayNo(new Date(now).toISOString());
+    for (const c of cats) {
+      if (GAMES.includes(c.categoryId) || NOT_TCG.test(games[c.categoryId])) continue;
+      try {
+        const gs = ((await getJ(`https://tcgcsv.com/tcgplayer/${c.categoryId}/groups`)).results || []).filter(g => { const d = relDay(g); return d && dayNo(d) - t <= CFG.ahead && dayNo(d) - t >= -CFG.back && !SKIP_SET.test(g.name); });
+        if (!gs.length) continue;
+        const pf = { groups: gs, products: {}, prices: {} };
+        for (const g of gs) {
+          const prods = (await getJ(`https://tcgcsv.com/tcgplayer/${c.categoryId}/${g.groupId}/products`)).results || [];
+          raw[g.groupId] = prods;
+          pf.products[g.groupId] = prods.map(x => [x.productId, x.name, '', '', x.imageUrl || '', (x.extendedData || []).some(e => e.name === 'Number') ? 1 : 0]);
+          const pr = {}; for (const x of ((await getJ(`https://tcgcsv.com/tcgplayer/${c.categoryId}/${g.groupId}/prices`)).results || [])) if (x.marketPrice > 0) (pr[x.productId] = pr[x.productId] || {})[x.subTypeName || 'Normal'] = x.marketPrice;
+          pf.prices[g.groupId] = pr;
+          if (!env.fast) await sleep(120);
+        }
+        priceFiles[c.categoryId] = pf;
+      } catch (e) { log(games[c.categoryId], e.message); }
+      if (!env.fast) await sleep(120);
+    }
+  } catch (e) { log('other games', e.message); }
+  const sets = pickSets(priceFiles, new Date(now).toISOString());
+  for (const r of sets) r.game = games[r.cat] || null;
   for (const r of sets) { // the set's product details, for the pop-up
     try {
-      const res = await fetchFn(`https://tcgcsv.com/tcgplayer/${r.cat}/${r.g}/products`, { headers: { 'user-agent': ua } });
-      if (res.ok) r.info = detailsOf(r, ((await res.json()).results) || [], priceFiles[r.cat]);
+      const prods = raw[r.g] || (await getJ(`https://tcgcsv.com/tcgplayer/${r.cat}/${r.g}/products`)).results || [];
+      r.info = detailsOf(r, prods, priceFiles[r.cat]);
+      if (!raw[r.g] && !env.fast) await sleep(150);
     } catch (e) { log(r.set, 'details', e.message); }
-    if (!env.fast) await sleep(150);
   }
   const eb = appId && certId ? (env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log })) : null;
   let searched = 0;
+  const old = new Map(((prev && prev.sets) || []).map(x => [x.cat + '|' + x.g, x]));
   for (const r of sets) {
     if (!eb) break;
+    const o = old.get(r.cat + '|' + r.g); // a set checked in the last day keeps that answer (eBay calls are shared with the deals)
+    if (o && o.checked && now - Date.parse(o.checked) < 24 * 3600000) { if (o.link) r.link = o.link; r.checked = o.checked; continue; }
+    r.checked = new Date(now).toISOString();
     for (const it of r.items.slice(0, CFG.tryItems)) {
       let list;
       try { list = await eb.find(queryOf(r, it)); searched++; }
@@ -160,11 +210,13 @@ async function runReleases(env = {}) {
       if (!env.fast) await sleep(250);
     }
   }
-  const out = { v: RELEASES_VERSION, updated: new Date(now).toISOString(), bar: { pct: CFG.minFeedback, ratings: CFG.minRatings, topRated: false }, sets };
+  let news = null; try { const b = await gh.download('prices', 'news.json'); news = b ? JSON.parse(b) : null; } catch (_) {}
+  const crowd = crowdGames((news && news.items) || [], Object.values(games), now);
+  const out = { v: RELEASES_VERSION, updated: new Date(now).toISOString(), bar: { pct: CFG.minFeedback, ratings: CFG.minRatings, topRated: false }, games, sets, crowd };
   await gh.put('prices', 'releases.json', Buffer.from(JSON.stringify(out)));
   log(`${sets.length} sets, ${searched} eBay searches, ${sets.filter(r => r.link).length} with a seller link`);
   return { sets: sets.length, searched };
 }
 
-module.exports = { detailsOf, insideOf, aboutOf, runReleases, pickSets, linkOk, queryOf, kindOf, CFG, RELEASES_VERSION };
+module.exports = { crowdGames, gameWord, detailsOf, insideOf, aboutOf, runReleases, pickSets, linkOk, queryOf, kindOf, CFG, RELEASES_VERSION };
 if (require.main === module) runReleases().catch(e => { console.error(e); process.exit(1); });
