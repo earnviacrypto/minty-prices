@@ -95,6 +95,8 @@ async function runReleases(env = {}) {
       let list;
       try { list = await eb.find(queryOf(r, it)); searched++; }
       catch (e) { log(r.set, e.message); if (e.limit) break; continue; }
+      const tr = list.filter(l => l.topRatedBuyingExperience === true), hi = tr.filter(l => parseFloat((l.seller || {}).feedbackPercentage) >= CFG.minFeedback && (l.seller || {}).feedbackScore >= CFG.minRatings);
+      log(`${queryOf(r, it)}: ${list.length} listings, ${tr.length} Top Rated, ${hi.length} at 99.7%/500` + (hi[0] ? ` – e.g. "${hi[0].title}" $${hi[0].price && hi[0].price.value} ${hi[0].condition || ''}` : ''));
       const ok = list.filter(l => linkOk(r, it, l)).sort((a, b) => parseFloat(a.price.value) - parseFloat(b.price.value));
       if (ok.length) { r.link = { id: it.id, u: ok[0].itemAffiliateWebUrl || ok[0].itemWebUrl }; break; }
       if (!env.fast) await sleep(250);
