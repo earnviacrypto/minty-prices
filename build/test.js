@@ -67,6 +67,10 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
     { productId: 3, name: 'Kraken (Showcase)', extendedData: [{ name: 'Number', value: '201/250' }] }, { productId: 4, name: 'Kraken', extendedData: [{ name: 'Number', value: '20/250' }] }, { productId: 5, name: 'Eel', extendedData: [{ name: 'Number', value: '21/250' }] }, { productId: 6, name: 'Crab', extendedData: [{ name: 'Number', value: '22/250' }] }];
   const det = R.detailsOf({ g: 9 }, prods, { prices: { 9: { 1: { Normal: 150 }, 3: { Foil: 40 }, 4: { Normal: 5 } } } });
   ok(det.products.length === 1 && det.products[0].price === 150 && det.revealed === 3 && det.cards[0].name === 'Kraken' && det.cards[0].price === 40 && det.size === 250, 'releases: details – cases left out, cards counted once per name (priciest printing), set size from "x/250"');
+  const sv = { cat: 73, set: 'BP21: Academy Royale', items: [] }, svi = { name: 'Academy Royale Booster Box', k: 'box', price: 90 };
+  ok(!R.linkOk(sv, svi, L('Shadowverse Evolve English BP21-22 Academy Royale & Dusk Calamity Booster Box', 95)) && R.linkOk(sv, svi, L('Shadowverse Evolve Academy Royale BP21 English Booster Box', 95)), 'releases: a listing with two sets in it is not linked');
+  const ws = { cat: 20, set: 'Rent-A-Girlfriend Vol.2', items: [] }, wsi = { name: 'Rent-A-Girlfriend Vol.2 Booster Box', k: 'box', price: 70 };
+  ok(!R.linkOk(ws, wsi, L('Weiss Schwarz Rent-A-Girlfriend English Booster Box', 69)) && R.linkOk(ws, wsi, L('Weiss Schwarz Rent-A-Girlfriend Vol. 2 English Booster Box', 69)), 'releases: Vol.2 needs a Vol.2 listing');
   const cg = R.crowdGames([{ t: 'Ignaris Trading Card Game Launches on Kickstarter', u: 'https://ex.com/i', d: '2026-11-18T00:00:00Z', crowd: 1, src: 'X' },
     { t: 'Cyberpunk TCG Announces Set 2 Called Edgerunners', u: 'https://ex.com/c', d: '2026-11-18T00:00:00Z', crowd: 1, src: 'X' },
     { t: 'Old Game TCG on Kickstarter', u: 'https://ex.com/o', d: '2026-08-01T00:00:00Z', crowd: 1, src: 'X' },

@@ -10,7 +10,7 @@ const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
 const { Ebay, setWords } = require('./deals');
 
-const RELEASES_VERSION = 3;
+const RELEASES_VERSION = 4;
 const GAMES = [3, 85, 68, 89, 92, 86, 2, 1]; // Minty's own games: read from the shared price files
 const NOT_TCG = /supplies|accessor|comic|funko|board game|miniature|sports card|non-sport|video game/i; // TCGplayer categories that are not card games
 const GAME_WORD = { 1: 'MTG', 2: 'Yugioh', 3: 'Pokemon', 68: 'One Piece', 85: 'Pokemon Japanese', 86: 'Gundam', 89: 'Riftbound', 92: 'Cyberpunk' };
@@ -80,6 +80,9 @@ function linkOk(rel, item, l) {
   if (!KIND_WORD[item.k].test(t)) return false;
   const other = OTHER_KIND.filter(re => re.test(t) && !re.test(' ' + item.name.toLowerCase() + ' '));
   if (other.length) return false; // a deck display is not a booster display, a bundle not a box
+  const vol = String(rel.set).match(/\bvol(?:ume)?\.?\s*(\d+)/i); // Vol.2 is not Vol.1
+  if (vol && !new RegExp(`\\bvol(ume)?\\.?\\s*${vol[1]}\\b`, 'i').test(l.title)) return false;
+  if (/\b[a-z]{1,4}\s?\d{2,3}\s*[-–&\/]\s*\d{2,3}\b/i.test(l.title) || /\s&\s.*\b(booster|box|display)\b.*\b(booster|box|display)\b/i.test(l.title)) return false; // two sets in one listing
   const p = parseFloat(l.price.value);
   if (item.price && !(p >= item.price * 0.6 && p <= item.price * 2.5)) return false; // far off the pre-order price: another product or a scalper
   return true;
@@ -193,7 +196,7 @@ async function runReleases(env = {}) {
   }
   const eb = appId && certId ? (env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log })) : null;
   let searched = 0;
-  const old = new Map(((prev && prev.sets) || []).map(x => [x.cat + '|' + x.g, x]));
+  const old = new Map(((prev && prev.v === RELEASES_VERSION && prev.sets) || []).map(x => [x.cat + '|' + x.g, x]));
   for (const r of sets) {
     if (!eb) break;
     const o = old.get(r.cat + '|' + r.g); // a set checked in the last day keeps that answer (eBay calls are shared with the deals)
