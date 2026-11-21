@@ -9,6 +9,7 @@
 const zlib = require('zlib');
 const { GitHub, sleep } = require('./gh');
 const { Ebay, setWords } = require('./deals');
+const { readMakers, mergeMakers } = require('./makers');
 
 const RELEASES_VERSION = 4;
 const GAMES = [3, 85, 68, 89, 92, 86, 2, 1]; // Minty's own games: read from the shared price files
@@ -44,7 +45,7 @@ function pickSets(priceFiles, today) {
       const rank = x => RANK.indexOf(x.k);
       sealed.sort((a, b) => rank(a) - rank(b) || (b.price || 0) - (a.price || 0));
       if (!sealed.length) continue; // cards only (box toppers, side sets): not a release to buy
-      out.push({ cat, set: g.name, g: g.groupId, date: day, items: sealed.slice(0, CFG.perSet) });
+      out.push({ cat, set: g.name, g: g.groupId, abbr: g.abbreviation || '', date: day, items: sealed.slice(0, CFG.perSet) });
     }
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.cat - b.cat);
@@ -194,9 +195,18 @@ async function runReleases(env = {}) {
       if (!raw[r.g] && !env.fast) await sleep(150);
     } catch (e) { log(r.set, 'details', e.message); }
   }
+  // the makers' own dates and contents (Bandai, Konami): their date wins, their contents fill the gaps, and what they have
+  // announced before TCGplayer lists it is added on its own
+  try {
+    const mk = env.makers || await readMakers({ fetchFn, ua, log, fast: env.fast, today: new Date(now).toISOString(), ahead: CFG.ahead, back: CFG.back });
+    const extra = mergeMakers(sets, mk, games);
+    sets.push(...extra); sets.sort((a, b) => a.date.localeCompare(b.date) || a.cat - b.cat);
+    log(`makers: ${mk.length} products, ${sets.filter(r => r.maker).length} sets dated by the maker, ${extra.length} not on TCGplayer yet`);
+  } catch (e) { log('makers', e.message); }
   const eb = appId && certId ? (env.ebay || new Ebay({ appId, certId, campaign, fetch: fetchFn, log })) : null;
   let searched = 0;
   const old = new Map(((prev && prev.v === RELEASES_VERSION && prev.sets) || []).map(x => [x.cat + '|' + x.g, x]));
+  for (const r of sets) delete r.abbr; // only for matching
   for (const r of sets) {
     if (!eb) break;
     const o = old.get(r.cat + '|' + r.g); // a set checked in the last day keeps that answer (eBay calls are shared with the deals)

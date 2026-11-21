@@ -2,6 +2,9 @@ name: Releases
 # Runs the Releases and News steps on their own (the hourly Prices job also runs it): publishes prices/releases.json.
 on:
   workflow_dispatch:
+  push: # a change to how releases are built goes out at once
+    branches: [main]
+    paths: ['build/releases.js', 'build/makers.js']
 permissions:
   contents: write
 concurrency:

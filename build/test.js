@@ -81,6 +81,45 @@ let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   ok(R.linkOk(ja, jit, L('Pokemon Japanese Something New Booster Box sealed', 70)) && !R.linkOk(ja, jit, L('Pokemon Something New Booster Box', 70)), 'releases: Japanese sets link only to listings that say Japanese');
 }
 
+// ---- the makers' own product lists (Bandai, Konami) ----
+{
+  const M = require('./makers');
+  const fx = n => fs.readFileSync(path.join(__dirname, 'fixtures', 'makers', n + '.html'), 'utf8');
+  const [op, dg, db, ua, gd, yg] = M.MAKERS;
+  const o = M.readList(fx('onepiece-list'), op.pages[0], op.sel), st = o.find(p => p.code === 'ST-38');
+  ok(st && st.date === '2026-12-18' && st.url === 'https://en.onepiece-cardgame.com/products/st38.html' && /^https:\/\/en\.onepiece-cardgame\.com\/onepiececg\/.+img_item01\.webp/.test(st.img), 'makers: One Piece – code, date, page and picture');
+  const d = M.readList(fx('digimon-list'), dg.pages[0], dg.sel), bt = d.find(p => p.code === 'BT-27'), pb = d.find(p => p.code === 'PB-28');
+  ok(bt && bt.date === '2026-12-11' && pb && pb.date === null, 'makers: Digimon – the release day, never the pre-release day; a month only ("June 2027") is no date');
+  const f = M.readList(fx('dbfw-list'), db.pages[0], db.sel)[0];
+  ok(f.code === 'FB11' && f.date === '2026-10-16' && /FB11_en\.png$/.test(f.img), 'makers: Dragon Ball Fusion World – code, date, picture (not the placeholder)');
+  const u = M.readList(fx('unionarena-list'), ua.pages[0], ua.sel)[0];
+  ok(u.date === '2027-06-18' && u.url === 'https://www.unionarena-tcg.com/na/products/boosters/ark-1.php', 'makers: Union Arena – date and page');
+  const g = M.fixGundam(fx('gundam-list'), gd.pages[0], gd.sel);
+  ok(g.length === 2 && g.find(p => p.code === 'ST14').url === 'https://www.gundam-gcg.com/en/products/st14.html' && g.find(p => p.code === 'GD06').date === '2026-10-30', 'makers: Gundam – starter decks and boosters with their own pages');
+  const y = M.readList(fx('yugioh-list'), yg.pages[0], yg.sel)[0];
+  ok(y.code === 'GLVI' && y.date === '2026-12-04', 'makers: Yu-Gi-Oh! – code from the page address, US date (MM/DD/YYYY)');
+  ok(JSON.stringify(M.contentsOf(fx('ua-ark-1'))) === JSON.stringify(['12 cards per pack', '1 Booster Pack = 12 cards', '1 Display Box = 16 packs', '1 Case = 16 Display Boxes']), 'makers: contents – the lines under Contents / Configuration');
+  ok(M.contentsOf(fx('dg-st25'))[0] === 'Pre-Constructed Deck x1 (54 cards)' && M.contentsOf(fx('gd-st14')).length === 6 && /DON!! Cards x 10/.test(M.contentsOf(fx('op-st38'))[0]), 'makers: contents on Digimon, Gundam and One Piece pages');
+  ok(M.isoDay('03/19/2027') === '2027-03-19' && M.isoDay('January 9, 2027') === '2027-01-09' && M.releaseOf('Pre-Release Date February 26, 2027 Release Date March 5, 2027') === '2027-03-05', 'makers: dates read the US way, release over pre-release');
+  // merging: the maker's date wins, its contents fill empty products, a deck set takes the deck page, new products added
+  const list = [
+    { cat: 80, code: 'FB12', title: 'BOOSTER PACK -REACH THE GOD- [FB12]', date: '2026-12-18', kind: 'pack', inc: ['1 Pack: 12 cards'], img: 'https://m/fb12.png', url: 'https://m/fb12', maker: 'Bandai' },
+    { cat: 81, code: 'UE27ST', title: 'Starter Deck Umamusume: Pretty Derby', date: '2027-02-05', kind: 'deck', inc: ['1 deck'], img: '', url: 'https://m/st', maker: 'Bandai' },
+    { cat: 81, code: 'UE27BT', title: 'Booster Pack Umamusume: Pretty Derby', date: '2027-02-12', kind: 'pack', inc: ['16 packs'], img: '', url: 'https://m/bt', maker: 'Bandai' },
+    { cat: 63, code: 'ST-25', title: 'DIGIMON CARD GAME DIGIMON ALYSION Rubeusdramon [ST-25]', date: '2026-12-04', kind: 'deck', inc: ['Pre-Constructed Deck x1 (54 cards)'], img: '', url: 'https://m/st25', maker: 'Bandai' },
+    { cat: 68, code: 'ST-38', title: 'STARTER DECK -Baroque Works- [ST-38]', date: '2026-12-18', kind: 'deck', inc: ['Constructed Deck x 1 (51 cards)'], img: 'https://m/st38.webp', url: 'https://m/st38', maker: 'Bandai' },
+    { cat: 68, code: '', title: 'OFFICIAL CARD SLEEVES 17', date: '2026-12-18', kind: 'other', inc: [], img: '', url: '', maker: 'Bandai' }];
+  const sets = [
+    { cat: 80, set: 'Reach the God', g: 1, abbr: 'FB12', date: '2026-12-11', items: [], info: { products: [{ name: 'Reach the God Booster Box', inc: [], img: '' }, { name: 'Reach the God Booster Pack', inc: ['already here'], img: 'x' }] } },
+    { cat: 81, set: 'UE27ST: Umamusume: Pretty Derby Starter Deck', g: 2, abbr: '', date: '2027-02-05', items: [{ name: 'Umamusume Starter Deck' }], info: { products: [] } },
+    { cat: 63, set: 'Starter Deck 25: Rubeusdramon', g: 3, abbr: 'BD01', date: '2026-12-04', items: [], info: { products: [{ name: 'Rubeusdramon Starter Deck', inc: [], img: '' }] } }];
+  const extra = M.mergeMakers(sets, list, { 68: 'One Piece Card Game' });
+  ok(sets[0].date === '2026-12-18' && sets[0].tcgDate === '2026-12-11' && sets[0].mk === 'm-FB12' && sets[0].info.products[0].inc[0] === '1 Pack: 12 cards' && sets[0].info.products[0].img === 'https://m/fb12.png' && sets[0].info.products[1].inc[0] === 'already here', "makers: the maker's date wins; its contents and picture fill only empty products");
+  ok(sets[1].date === '2027-02-05' && sets[1].mk === 'm-UE27ST', 'makers: a starter deck set takes the deck page, not the booster with the same name');
+  ok(sets[2].mk === 'm-ST-25' && sets[2].info.products[0].inc[0] === 'Pre-Constructed Deck x1 (54 cards)', 'makers: matched by name when the codes differ (BD01 / ST-25)');
+  ok(extra.length === 1 && extra[0].set === 'Baroque Works' && extra[0].g === 'm-ST-38' && extra[0].game === 'One Piece Card Game' && extra[0].items[0].price === null && extra[0].info.products[0].name === 'Starter Deck Baroque Works' && extra[0].info.products[0].img === 'https://m/st38.webp', 'makers: announced but not on TCGplayer – its own set, no price; sleeves left out');
+}
+
 // ---- sealed: opened boxes and missing packs ----
 {
   const D = require('./deals');
