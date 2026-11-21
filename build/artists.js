@@ -58,12 +58,22 @@ async function magic(fetchFn) {
   if (!url) throw new Error('Scryfall: no default_cards file');
   const r = await fetchFn(url, { headers: { 'user-agent': UA, accept: '*/*' } });
   if (!r.ok) throw new Error('Scryfall file: ' + r.status);
-  let buf = Buffer.from(await r.arrayBuffer());
-  if (buf[0] === 0x1f && buf[1] === 0x8b) buf = zlib.gunzipSync(buf);
-  const text = buf.toString('utf8'), out = [];
+  // read it as it arrives, line by line (the whole file is too large to hold as one piece of text)
+  const out = [];
   const take = c => { if (c.lang && c.lang !== 'en') return; const a = clean(c.artist); if (a) for (const p of ids([c.tcgplayer_id, c.tcgplayer_etched_id].filter(Boolean))) out.push([p, a]); };
-  if (text.trimStart().startsWith('[')) JSON.parse(text).forEach(take);
-  else for (const line of text.split('\n')) { const l = line.trim().replace(/,$/, ''); if (l.startsWith('{')) { try { take(JSON.parse(l)); } catch (_) {} } }
+  const dec = new TextDecoder(); let rest = '';
+  const feed = str => { rest += str; let i; while ((i = rest.indexOf('\n')) >= 0) { const l = rest.slice(0, i).trim().replace(/,$/, ''); rest = rest.slice(i + 1); if (l.startsWith('{')) { try { take(JSON.parse(l)); } catch (_) {} } } };
+  const reader = r.body.getReader();
+  let gz = null, gzDone = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const ch = Buffer.from(value);
+    if (gz === null) { if (ch[0] === 0x1f && ch[1] === 0x8b) { gz = zlib.createGunzip(); gz.on('data', d => feed(dec.decode(d, { stream: true }))); gzDone = new Promise((res, rej) => { gz.on('end', res); gz.on('error', rej); }); } else gz = false; }
+    if (gz) { if (!gz.write(ch)) await new Promise(res => gz.once('drain', res)); } else feed(dec.decode(ch, { stream: true }));
+  }
+  if (gz) { gz.end(); await gzDone; }
+  feed(dec.decode() + '\n');
   return out;
 }
 // Lorcana: Lorcast, set by set.
