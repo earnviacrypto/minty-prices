@@ -1,0 +1,35 @@
+name: Events
+# Runs the Events step on its own (the hourly Prices job also runs it every 6 hours): publishes prices/events.json and
+# draws venue maps (release "maps"). A change to this file, or a run started by hand, always does the work.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/events.yml']
+permissions:
+  contents: write
+concurrency:
+  group: events
+  cancel-in-progress: false
+jobs:
+  events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Job code (private project)
+        uses: actions/checkout@v4
+        with:
+          repository: earnviacrypto/minty-jobs
+          token: ${{ secrets.JOBS_TOKEN }}
+          path: jobs
+      - name: Use the job code for this run only
+        run: cp -r jobs/build jobs/config.json jobs/package.json jobs/checks . && rm -rf jobs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Events
+        run: node build/events.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_FORCE: '1'
