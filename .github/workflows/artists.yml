@@ -1,0 +1,40 @@
+name: Artists
+# Who drew each card (Pokémon, Magic, Lorcana, Star Wars Unlimited, Riftbound, Flesh and Blood): publishes
+# prices/artists.json.gz. Daily; the first runs carry on reading Pokémon where the last one stopped.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Read only these games (comma-separated); the rest keep the last file'
+        required: false
+        default: ''
+  schedule:
+    - cron: '17 5 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: artists
+  cancel-in-progress: false
+jobs:
+  artists:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Job code (private project)
+        uses: actions/checkout@v4
+        with:
+          repository: earnviacrypto/minty-jobs
+          token: ${{ secrets.JOBS_TOKEN }}
+          path: jobs
+      - name: Use the job code for this run only
+        run: cp -r jobs/build jobs/config.json jobs/package.json jobs/checks . && rm -rf jobs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Artists
+        run: node --max-old-space-size=7000 build/artists.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTISTS_MINUTES: '45'
+          ARTISTS_ONLY: ${{ github.event.inputs.only }}

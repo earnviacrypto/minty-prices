@@ -1,0 +1,40 @@
+name: Releases
+# Runs the Releases and News steps on their own (the hourly Prices job also runs it): publishes prices/releases.json.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: releases
+  cancel-in-progress: false
+jobs:
+  releases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Job code (private project)
+        uses: actions/checkout@v4
+        with:
+          repository: earnviacrypto/minty-jobs
+          token: ${{ secrets.JOBS_TOKEN }}
+          path: jobs
+      - name: Use the job code for this run only
+        run: cp -r jobs/build jobs/config.json jobs/package.json jobs/checks . && rm -rf jobs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Releases
+        run: node build/releases.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+          EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+          RELEASES_FORCE: '1' # a run started by hand always does the work
+      - name: News
+        if: always()
+        run: node build/news.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_FORCE: '1'

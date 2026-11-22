@@ -1,0 +1,104 @@
+name: Prices
+# Every hour: does work only when TCGCSV has new prices (once a day) or archive days are still to be read.
+on:
+  schedule:
+    - cron: '17 * * * *'
+    - cron: '47 */3 * * *' # second slot in case GitHub skips the first
+  workflow_dispatch:
+  push: # a change to the job runs it at once
+    branches: [main]
+    paths: ['.github/workflows/prices.yml', 'auth/refresh.enc']
+permissions:
+  contents: write
+  actions: write # lets the job start its next run itself
+concurrency:
+  group: prices
+  cancel-in-progress: false
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+      - name: Job code (private project)
+        uses: actions/checkout@v4
+        with:
+          repository: earnviacrypto/minty-jobs
+          token: ${{ secrets.JOBS_TOKEN }}
+          path: jobs
+      - name: Use the job code for this run only
+        run: cp -r jobs/build jobs/config.json jobs/package.json jobs/checks . && rm -rf jobs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 7-Zip
+        run: which 7z || (sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full)
+      - name: Check
+        run: node build/test.js
+      - name: Read prices
+        run: node build/run.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_MINUTES: '300'
+      - name: Deals
+        if: always()
+        run: node build/deals.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+          EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: Releases
+        if: always()
+        run: node build/releases.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+          EBAY_CAMPAIGN_ID: ${{ secrets.EBAY_CAMPAIGN_ID }}
+      - name: News
+        if: always()
+        run: node build/news.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Events
+        if: always()
+        run: node build/events.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: eBay catalog numbers
+        if: always()
+        run: node build/catalog.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+      - name: Exchange rates
+        if: always()
+        run: node build/rates.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Graded prices
+        if: always()
+        run: node build/graded.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PI_KEY: ${{ secrets.PI_KEY }}
+      - name: Grading companies
+        if: always()
+        run: node build/grading.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Next run
+        # GitHub's hourly schedule can be skipped for days, so the job keeps itself going:
+        # wait until about an hour after this run started, then start the next run if none is waiting.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          started=$(date -d "$(gh run view ${{ github.run_id }} --json startedAt -q .startedAt)" +%s)
+          left=$(( started + 3500 - $(date +%s) ))
+          if [ $left -gt 0 ]; then sleep $left; fi
+          waiting=$(gh run list -w Prices --json status -q '[.[] | select(.status=="queued" or .status=="waiting" or .status=="pending")] | length')
+          if [ "$waiting" = "0" ]; then gh workflow run Prices --ref main; echo "next run started"; else echo "a run is already waiting"; fi
