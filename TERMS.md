@@ -1,6 +1,6 @@
 # Minty TCG Portfolio Tracker – Terms of Use
 
-Effective: November 19, 2026 (second version – adds section 3, "Ownership and copying")
+Effective: November 22, 2026 (third version – wording only)
 
 These terms are an agreement between you and the maker of Minty TCG Portfolio Tracker ("Minty"), publishing as Minty Collector Apps. By clicking "I agree" in Minty, or by using Minty, you accept them. If you do not agree, do not use Minty.
 
@@ -41,7 +41,7 @@ Minty links to and downloads from other sites and services. Minty does not contr
 
 ## 7. Your data
 
-Your collection stays on your computer (see the Privacy Policy: https://github.com/earnviacrypto/minty-prices/blob/main/PRIVACY.md). You are responsible for keeping your own backups.
+Your collection stays on your device (see the Privacy Policy: https://minty-tcg.pages.dev/privacy). You are responsible for keeping your own backups.
 
 ## 8. No warranty
 
