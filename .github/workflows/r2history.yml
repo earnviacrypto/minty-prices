@@ -8,6 +8,9 @@ on:
       keep:
         description: 'Days kept whole before folding (normally 30)'
         default: '30'
+      reset:
+        description: 'Remove packed files of an unfinished first run (1 = yes; refused once any day is folded)'
+        default: '0'
   schedule:
     - cron: '13 17 * * *'
 permissions:
@@ -39,3 +42,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_KEEP: ${{ inputs.keep || '30' }}
+          R2_RESET_PACKED: ${{ inputs.reset || '0' }}
