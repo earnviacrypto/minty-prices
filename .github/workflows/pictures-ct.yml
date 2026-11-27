@@ -1,0 +1,39 @@
+name: CardTrader pictures
+# Pictures for products TCGplayer has none of, from CardTrader's blueprints (build/ctpictures.js in the private job code).
+# Slow on purpose: random 3-8 s gaps between CardTrader calls, 4-10 s between pictures, about 40 minutes a run.
+# New pictures get Minty numbers and go on the site (Cloudflare Pages "minty-tcg"); nothing is deployed unless every file
+# already on the site was read first.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '43 8 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: ctpictures
+  cancel-in-progress: false
+jobs:
+  pictures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Job code (private project)
+        uses: actions/checkout@v4
+        with:
+          repository: earnviacrypto/minty-jobs
+          token: ${{ secrets.JOBS_TOKEN }}
+          path: jobs
+      - name: Use the job code for this run only
+        run: cp -r jobs/build jobs/config.json jobs/package.json . && rm -rf jobs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: CardTrader pictures
+        run: node build/ctpictures.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARDTRADER_TOKEN: ${{ secrets.CARDTRADER_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CT_MINUTES: '40'
