@@ -15,6 +15,8 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           T=$(printf %s "$CF_TOKEN" | tr -d '[:space:]'); A=$(printf %s "$CF_ACCOUNT" | tr -d '[:space:]')
+          case "$CF_TOKEN" in *Bearer*) echo "the saved key holds more than the key (looks like the curl line) – using the part after Bearer"; T=$(printf %s "$CF_TOKEN" | grep -o 'Bearer[[:space:]]*[A-Za-z0-9_.-]*' | head -1 | sed 's/^Bearer[[:space:]]*//');; esac
+          echo "words in the saved key: $(printf %s "$CF_TOKEN" | wc -w)"
           echo "key length: ${#T} (pasted ${#CF_TOKEN}); account id length: ${#A}"
           api() { curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4$1"; }
           echo "key valid (account token):"; api /accounts/$A/tokens/verify | jq -c '{success, status: .result.status, errors: [.errors[]?.message]}'
