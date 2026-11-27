@@ -1,0 +1,37 @@
+name: Data to Cloudflare
+# Every 3 hours (his choice, 27 Nov 2026): the files every copy of Minty downloads – releases prices, history, maps, media
+# and status.json – are published to the Cloudflare Pages project "minty-data" (build/cfdata.js in the private job code).
+# ~240 deploys a month of the free plan's 500. Nothing is deployed unless every file downloaded whole; every file is read
+# back from Cloudflare afterwards. The app reads Cloudflare first, GitHub when Cloudflare fails.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 */3 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: cfdata
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Job code (private project)
+        uses: actions/checkout@v4
+        with:
+          repository: earnviacrypto/minty-jobs
+          token: ${{ secrets.JOBS_TOKEN }}
+          path: jobs
+      - name: Use the job code for this run only
+        run: cp -r jobs/build jobs/config.json jobs/package.json . && rm -rf jobs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Data to Cloudflare
+        run: node build/cfdata.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
