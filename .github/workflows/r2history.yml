@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: 22
       - name: Price history to R2
-        run: node build/r2history.js
+        run: node --max-old-space-size=12288 build/r2history.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
