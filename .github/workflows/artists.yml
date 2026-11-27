@@ -18,7 +18,7 @@ concurrency:
 jobs:
   artists:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Job code (private project)
@@ -32,13 +32,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Gundam illustrators (read off the official card pictures)
-        run: |
-          sudo apt-get install -y -qq tesseract-ocr > /dev/null
-          pip install -q pillow
-          python3 build/gundam_illust.py || echo 'gundam illustrators: failed'
-        env:
-          GUNDAM_MINUTES: '20'
       - name: Artists
         run: node --max-old-space-size=7000 build/artists.js
         env:
