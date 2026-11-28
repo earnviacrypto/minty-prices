@@ -97,6 +97,26 @@ jobs:
         run: node build/grading.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start the other daily jobs when due
+        # GitHub skips scheduled start times on busy days, so this hourly job (which keeps itself going) also starts:
+        # the Cloudflare copy every 3 hours, the picture job once a day after 3:43 AM ET, the R2 price history once a day
+        # after 12:13 PM ET – each only when it has not run in that window and is not already running.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          now=$(date +%s); today=$(TZ=America/New_York date +%F); hm=$(TZ=America/New_York date +%H%M)
+          busy() { gh run list -w "$1" -L 5 --json status -q '[.[] | select(.status!="completed")] | length'; }
+          last() { gh run list -w "$1" -L 1 --json createdAt -q '.[0].createdAt // ""'; }
+          etday() { [ -n "$1" ] && TZ=America/New_York date -d "$1" +%F || echo none; }
+          etmin() { [ -n "$1" ] && TZ=America/New_York date -d "$1" +%H%M || echo 0000; }
+          l=$(last "Data to Cloudflare")
+          if [ "$(busy 'Data to Cloudflare')" = "0" ] && { [ -z "$l" ] || [ $(( now - $(date -d "$l" +%s) )) -ge 10500 ]; }; then gh workflow run cfdata.yml --ref main && echo "Cloudflare copy started"; fi
+          l=$(last "CardTrader pictures")
+          if [ "$hm" -ge 0343 ] && [ "$(busy 'CardTrader pictures')" = "0" ] && [ "$(etday "$l")" != "$today" ]; then gh workflow run pictures-ct.yml --ref main && echo "picture job started"; fi
+          l=$(last "Price history to R2")
+          if [ "$hm" -ge 1213 ] && [ "$(busy 'Price history to R2')" = "0" ] && { [ "$(etday "$l")" != "$today" ] || [ "$(etmin "$l")" -lt 1213 ]; }; then gh workflow run r2history.yml --ref main && echo "R2 price history started"; fi
       - name: Next run
         # GitHub's hourly schedule can be skipped for days, so the job keeps itself going:
         # wait until about an hour after this run started, then start the next run if none is waiting.
