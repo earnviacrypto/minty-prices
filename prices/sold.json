@@ -1,0 +1,20 @@
+{
+  "note": "Products no price list has yet, priced from their recent sold listings: the middle price of single-unit sales (lots and delivery not counted). Read by Minty every 6 hours.",
+  "updated": "2026-11-28",
+  "items": [
+    {
+      "game": "pokemoncn",
+      "set": "Chinese Gem Pack 7",
+      "names": ["Gem Pack 7 Booster Box", "Booster Box"],
+      "kind": "sealed",
+      "value": 42.00,
+      "asOf": "2026-11-28T12:00:00Z",
+      "sales": 22,
+      "window": 7,
+      "low": 25.00,
+      "high": 44.99,
+      "basis": "eBay US sold, single boxes, 21-28 Nov 2026",
+      "url": "https://www.ebay.com/sch/i.html?_nkw=gem+pack+vol+7+booster+box+chinese+CBB7C&LH_Sold=1&LH_Complete=1&LH_PrefLoc=1"
+    }
+  ]
+}
